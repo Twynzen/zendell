@@ -1,47 +1,34 @@
 # /agents/activity_collector.py
 
-# 1) Importamos TypedDict para definir la "forma" (schema) del estado,
-# y Optional/List si requerimos usar listas u opciones en el estado.
-from typing import TypedDict, Optional, List
+from typing import TypedDict, Optional, List, Dict
+from services.llm_provider import ask_gpt
 
-# 2) Definimos la clase "State" que extiende TypedDict.
-#    Aquí especificamos qué datos estaremos manejando.
-#    En este caso, "my_var", "customer_name" y "activities".
-#    "activities" será una lista donde iremos guardando
-#    lo que vayamos "recolectando".
 class State(TypedDict):
-    my_var: str
     customer_name: str
-    activities: List[str]
+    activities: List[Dict[str, str]]  # Lista de actividades con tipo {'activity': str, 'type': str}
+    last_activity_time: str
 
-# 3) Esta función es el nodo (agente) que recolecta
-#    o actualiza la información del usuario.
-#    - "state" es el estado actual
-#    - "new_activity" es la actividad que queremos
-#      añadir a la lista (por ejemplo, "Tomar café", "Estudiar Python", etc.).
 def activity_collector_node(
     state: State,
     new_activity: Optional[str] = None
 ) -> State:
     """
-    Recolecta la actividad (si viene) y la registra en el estado.
+    Recolecta la actividad (si viene), la categoriza usando un LLM y la registra en el estado.
     """
 
-    # 3.1) Si el "activities" no existe (o viene vacío),
-    #      inicializamos la lista. (En teoría con TypedDict,
-    #      ya lo definimos, pero es buena práctica chequear).
     if "activities" not in state or state["activities"] is None:
         state["activities"] = []
 
-    # 3.2) Si recibimos una actividad nueva, la agregamos
-    #      a la lista de actividades.
     if new_activity:
-        state["activities"].append(new_activity)
+        # Preparamos un prompt para el LLM para categorizar la actividad
+        prompt = f"Clasifica la siguiente actividad en una de estas categorías: Trabajo, Descanso, Ejercicio, Ocio, Otro. Actividad: '{new_activity}'. Responde solo con la categoría."
+        activity_type = ask_gpt(prompt)
 
-    # 3.3) Podemos modificar otras partes del estado, por ejemplo "my_var".
-    #      Podríamos usarlo como una especie de "debug" o "mensaje".
-    state["my_var"] = "Activity collector updated the list."
+        # Añadimos la actividad con su categoría al estado
+        state["activities"].append({"activity": new_activity, "type": activity_type})
 
-    # 3.4) Retornamos el estado actualizado para que el grafo
-    #      o siguiente agente lo procese.
+    # Registramos la hora de la última actividad
+    from datetime import datetime
+    state["last_activity_time"] = datetime.now().isoformat()
+
     return state
