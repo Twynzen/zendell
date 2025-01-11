@@ -4,6 +4,8 @@
 from agents.activity_collector import activity_collector_node, State
 from agents.analyzer import analyzer_node, State
 from agents.recommender import recommender_node, State
+from agents.goal_finder import goal_finder_node, State
+
 from datetime import datetime
 
 def test_activity_collector():
@@ -103,3 +105,61 @@ def test_recommender_node():
         datetime.fromisoformat(updated_state["last_recommendation_time"])
     except ValueError:
         assert False, "El formato de la hora registrada no es válido."
+
+def test_goal_finder_node_first_interaction():
+    """
+    Prueba el nodo 'goal_finder' en su primera interacción con el usuario.
+    Verificamos que solicite información general y actualice el estado.
+    """
+
+    initial_state: State = {
+        "customer_name": None,
+        "general_info": {},
+        "short_term_info": [],
+        "last_interaction_time": ""
+    }
+
+    print(f"\n[TEST] Probando 'goal_finder_node' en la primera interacción con estado inicial: {initial_state}")
+
+    # Ejecutamos el nodo goal_finder
+    updated_state = goal_finder_node(initial_state)
+
+    print(f"[TEST] Estado actualizado tras la primera interacción: {updated_state}")
+
+    # Verificamos que se haya solicitado información general
+    assert "respuesta_inicial" in updated_state["general_info"], "No se solicitó información general al usuario."
+    assert updated_state["customer_name"] == "Desconocido", "El nombre temporal no fue establecido correctamente."
+
+    # Verificamos que se haya registrado la hora de la última interacción
+    assert updated_state["last_interaction_time"] != "", "No se registró la hora de la interacción."
+
+
+def test_goal_finder_node_follow_up():
+    """
+    Prueba el nodo 'goal_finder' en una interacción posterior con el usuario.
+    Verificamos que solicite información a corto plazo y actualice el estado.
+    """
+
+    initial_state: State = {
+        "customer_name": "Daniel",
+        "general_info": {
+            "nombre": "Daniel",
+            "sueños": "Ser un gran desarrollador de IA",
+            "hobbies": ["Videojuegos", "Programación", "Leer"]
+        },
+        "short_term_info": ["Tomar café", "Estudiar Python"],
+        "last_interaction_time": ""
+    }
+
+    print(f"\n[TEST] Probando 'goal_finder_node' en una interacción posterior con estado inicial: {initial_state}")
+
+    # Ejecutamos el nodo goal_finder
+    updated_state = goal_finder_node(initial_state)
+
+    print(f"[TEST] Estado actualizado tras la interacción posterior: {updated_state}")
+
+    # Verificamos que se haya solicitado información a corto plazo
+    assert len(updated_state["short_term_info"]) > 2, "No se solicitó información a corto plazo al usuario."
+
+    # Verificamos que se haya registrado la hora de la última interacción
+    assert updated_state["last_interaction_time"] != "", "No se registró la hora de la interacción."
