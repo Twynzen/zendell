@@ -1,6 +1,6 @@
 # core/db.py
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -51,7 +51,7 @@ class MongoDBManager:
             new_user = {
                 "userId": user_id,
                 "name": "Placeholder",
-                "createdAt": datetime.utcnow().isoformat()
+                "createdAt": datetime.now(timezone.utc).isoformat()
             }
             self.users_coll.insert_one(new_user)
 
