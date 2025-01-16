@@ -14,8 +14,8 @@ def db_manager():
         db_name="zendell_test_db"
     )
     yield db
-    print("[TEARDOWN] Limpiando base de datos de prueba...")
-    db.client.drop_database("zendell_test_db")
+#    print("[TEARDOWN] Limpiando base de datos de prueba...")
+#    db.client.drop_database("zendell_test_db")
 
 
 def test_save_and_get_state(db_manager):
