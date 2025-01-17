@@ -1,37 +1,64 @@
-# /tests/test_integration.py
+# /tests/test_integration_real.py
 import asyncio
 import pytest
-from unittest.mock import AsyncMock
+import threading
+from core.db import MongoDBManager
 from services.discord_service import DiscordService
 from zendell.agents.communicator import Communicator
-from core.db import MongoDBManager
 
-class FakeDiscordService(DiscordService):
-    """Fake Discord Service para testear sin conectar a Discord."""
-    async def send_dm(self, user_id: str, text: str):
-        print(f"[FAKE DISCORD] Enviando DM a {user_id}: {text}")
-    
-    def run_bot(self):
-        print("[FAKE DISCORD] run_bot llamado")
+# Para este test, se asume que en el .env está configurada la variable DISCORD_BOT_TOKEN
+# y que el bot está configurado para conectarse a un servidor de prueba.
 
 @pytest.fixture
 def db_manager():
-    # Instancia real o mock de MongoDBManager para pruebas
-    db = MongoDBManager(uri="mongodb://root:rootpass@localhost:27017", db_name="zendell_test_db")
-    return db
+    # Se utiliza la instancia real de MongoDBManager para probar el flujo completo.
+    # Asegúrate de que la base de datos de test está correctamente definida y aislada.
+    return MongoDBManager(
+        uri="mongodb://root:rootpass@localhost:27017",
+        db_name="zendell_test_db"
+    )
+
+def start_discord_bot(communicator: Communicator):
+    """Ejecuta el bot de discord en un hilo separado para no bloquear la ejecución del test."""
+    def run_bot():
+        communicator.start_bot()  # Este método es bloqueante y gestionará el loop de Discord.
+    thread = threading.Thread(target=run_bot, daemon=True)
+    thread.start()
+    return thread
 
 @pytest.mark.asyncio
-async def test_complete_flow(db_manager):
-    fake_service = FakeDiscordService()
-    communicator = Communicator(discord_service=fake_service, db_manager=db_manager)
+async def test_multiagent_flow_end_to_end(db_manager):
+    """
+    Test de integración que lanza el bot real y simula un flujo de conversación:
+     - El bot se conecta a Discord.
+     - Se dispara una interacción inicial proactiva.
+     - El bot envía su primer mensaje al usuario (o canal).
+    """
+    # Creamos la instancia del DiscordService real.
+    discord_service = DiscordService(intents=discord.Intents.default())
     
-    # Simulamos el envío de varios mensajes y la terminación con "FIN"
-    user_id = "123456789"  # ID de Discord de prueba
-    # Simulamos mensajes entrantes:
-    await communicator.on_user_message("Hola, ¿cómo estás?", user_id)
-    await communicator.on_user_message("Quiero contar algo importante.", user_id)
-    await communicator.on_user_message("FIN", user_id)
+    # Instanciamos el Communicator con el servicio real y el db_manager.
+    communicator = Communicator(discord_service=discord_service, db_manager=db_manager)
     
-    # Aquí se debería verificar (por ejemplo, en la BD o en la salida impresa) que se realizó
-    # la secuencia: acumulación de mensajes, llamado a activity_collector y goal_finder, etc.
-    # Puedes incluir asserts específicos según lo que esperas.
+    # Arrancamos el bot en un hilo separado.
+    start_discord_bot(communicator)
+    
+    # Damos tiempo para que el bot se conecte.
+    await asyncio.sleep(5)
+    
+    # Simulamos que se fuerza una interacción proactiva.
+    # En este ejemplo, se asume que el usuario de prueba es identificado por su Discord user_id.
+    test_user_id = "123456789012345678"  # <--- Reemplazar con un ID real o de prueba (por DM)
+    
+    # Se invoca trigger_interaction para que se genere la respuesta inicial basada en goal_finder_node.
+    communicator.trigger_interaction(test_user_id)
+    
+    # Esperamos algunos segundos para que el mensaje se envie.
+    await asyncio.sleep(5)
+    
+    # A este nivel podrías hacer validaciones adicionales:
+    # Por ejemplo, consultando la BD para verificar que se registró el estado,
+    # o revisar logs del bot.
+    #
+    # En este ejemplo, el test termina con éxito si no se lanzan excepciones.
+    assert True
