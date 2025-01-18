@@ -3,7 +3,7 @@
 import pytest
 from services.llm_provider import ask_gpt
 
-@pytest.mark.skip(reason="Este test funciona correctamente y no requiere ser ejecutado ahora.")
+#@pytest.mark.skip(reason="Este test funciona correctamente y no requiere ser ejecutado ahora.")
 @pytest.mark.parametrize("prompt", [
     "Hola, ¿cómo estás?",
     "¿Cuál es la capital de Francia?"
