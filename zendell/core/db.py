@@ -1,12 +1,12 @@
 # core/db.py
-
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
 # Nota: Si vas a usar Docker con la URI:
-MONGO_URL = "mongodb://root:rootpass@localhost:27017"  # Ajusta usuario y pass según tu docker-compose
+MONGO_URL = "mongodb://root:rootpass@localhost:27017/?authSource=admin"
+# Ajusta usuario y pass según tu docker-compose
 
 class MongoDBManager:
     def __init__(self, uri: str = MONGO_URL, db_name: str = "zendell_db"):
@@ -23,61 +23,60 @@ class MongoDBManager:
     def get_state(self, user_id: str) -> Dict[str, Any]:
         """
         Recupera el documento user_state de la colección 'user_states'.
-        Retorna un dict con la info del userState, o {} si no existe.
+        Si no existe, crea un estado inicial y lo retorna.
         """
-        doc = self.user_state_coll.find_one({"userId": user_id})
-        if not doc:
-            return {}
+        doc = self.user_state_coll.find_one({"user_id": user_id})
         
-        # Convertimos campos a lo que necesitemos
+        # Si el usuario no tiene estado, creamos uno nuevo por defecto
+        if not doc:
+            initial_state = {
+                "user_id": user_id,
+                "last_interaction_time": "",
+                "daily_interaction_count": 0,
+                "last_interaction_date": "",
+                "short_term_info": [],
+                "general_info": {}  # Aseguramos que 'general_info' esté siempre presente
+            }
+            self.user_state_coll.insert_one(initial_state)
+            return initial_state
+
         return {
-            "userId": doc["userId"],
-            "lastInteractionTime": doc.get("lastInteractionTime", ""),
-            "dailyInteractionCount": doc.get("dailyInteractionCount", 0),
-            "lastInteractionDate": doc.get("lastInteractionDate", ""),
-            "shortTermInfo": doc.get("shortTermInfo", []),
-            "generalInfo": doc.get("generalInfo", {})
+            "user_id": doc["user_id"],
+            "last_interaction_time": doc.get("last_interaction_time", ""),
+            "daily_interaction_count": doc.get("daily_interaction_count", 0),
+            "last_interaction_date": doc.get("last_interaction_date", ""),
+            "short_term_info": doc.get("short_term_info", []),
+            "general_info": doc.get("general_info", {})  # Aseguramos estructura correcta
         }
+
     
     def save_state(self, user_id: str, state: Dict[str, Any]) -> None:
         """
         Inserta o actualiza un user_state en 'user_states'.
-        También se asegura de que exista un 'users' con userId = user_id.
+        Se asegura de mantener la estructura base.
         """
-        # 1) Asegurar user
-        user_doc = self.users_coll.find_one({"userId": user_id})
-        if not user_doc:
-            # Creamos un user placeholder
-            new_user = {
-                "userId": user_id,
-                "name": "Placeholder",
-                "createdAt": datetime.now(timezone.utc).isoformat()
-            }
-            self.users_coll.insert_one(new_user)
-
-        # 2) Insert/update userState
-        query = {"userId": user_id}
+        query = {"user_id": user_id}
         update_data = {
-            "userId": user_id,
-            "lastInteractionTime": state.get("lastInteractionTime", ""),
-            "dailyInteractionCount": state.get("dailyInteractionCount", 0),
-            "lastInteractionDate": state.get("lastInteractionDate", ""),
-            "shortTermInfo": state.get("shortTermInfo", []),
-            "generalInfo": state.get("generalInfo", {})
+            "user_id": user_id,
+            "last_interaction_time": state.get("last_interaction_time", ""),
+            "daily_interaction_count": state.get("daily_interaction_count", 0),
+            "last_interaction_date": state.get("last_interaction_date", ""),
+            "short_term_info": state.get("short_term_info", []),
+            "general_info": state.get("general_info", {})  # Garantizar existencia
         }
-        
-        # upsert: True => si no existe, lo crea
+
         self.user_state_coll.update_one(query, {"$set": update_data}, upsert=True)
+
     
     # Ejemplo para Activities
     def add_activity(self, user_id: str, activity_data: Dict[str, Any]):
         """
         Inserta una actividad en 'activities'.
         """
-        activity_data["userId"] = user_id
+        activity_data["user_id"] = user_id
         activity_data["timestamp"] = datetime.utcnow().isoformat()
-        # Podrías crear tu propio activityId con ObjectId, o un str random
-        activity_data["activityId"] = str(ObjectId())
+        # Podrías crear tu propio activity_id con ObjectId, o un str random
+        activity_data["activity_id"] = str(ObjectId())
         self.activities_coll.insert_one(activity_data)
     
     # Podrías seguir con "get_activities(user_id)" o "save_goal()", etc.

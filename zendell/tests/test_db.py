@@ -10,7 +10,7 @@ def db_manager():
     """
     print("[SETUP] Creando instancia de MongoDBManager...")
     db = MongoDBManager(
-        uri="mongodb://root:rootpass@localhost:27017", 
+        uri="mongodb://root:rootpass@localhost:27017/?authSource=admin", 
         db_name="zendell_test_db"
     )
     yield db

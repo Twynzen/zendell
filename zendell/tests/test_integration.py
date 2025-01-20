@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 @pytest.fixture
 def db_manager():
     return MongoDBManager(
-        uri="mongodb://root:rootpass@localhost:27017",
+        uri="mongodb://root:rootpass@localhost:27017/?authSource=admin",
         db_name="zendell_test_db"
     )
 
