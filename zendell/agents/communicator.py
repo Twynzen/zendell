@@ -1,10 +1,12 @@
 # agents/communicator.py
 import asyncio
 from datetime import datetime
-from services.discord_service import register_message_callback, send_dm, run_bot
-from core.db import MongoDBManager
-from agents.goal_finder import goal_finder_node
-from agents.activity_collector import activity_collector_node
+
+# Ajusta los imports con tu ruta real
+from zendell.services.discord_service import send_dm
+from zendell.core.db import MongoDBManager
+from zendell.agents.goal_finder import goal_finder_node
+from zendell.agents.activity_collector import activity_collector_node
 
 class Communicator:
     """
@@ -13,20 +15,21 @@ class Communicator:
 
     def __init__(self, db_manager: MongoDBManager):
         self.db_manager = db_manager
-        # Registramos la función que manejará los mensajes entrantes
-        register_message_callback(self.on_user_message)
         self.conversations = {}  # {discord_user_id: [mensaje1, mensaje2, ...]}
 
     async def on_user_message(self, message_text: str, author_id: str):
         print(f"[Communicator] Mensaje recibido de user_id={author_id}: {message_text}")
+
+        # Guardar el mensaje en DB
         conversation_log = {
-        "user_id": author_id,
-        "timestamp": datetime.utcnow().isoformat(),
-        "message": message_text,
-        "is_bot": False  # O True si fuera la respuesta del bot
+            "user_id": author_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "message": message_text,
+            "is_bot": False
         }
         self.db_manager.conversations_coll.insert_one(conversation_log)
 
+        # Lógica en RAM
         conversation = self.conversations.get(author_id, [])
         conversation.append(message_text)
         self.conversations[author_id] = conversation
@@ -38,6 +41,7 @@ class Communicator:
             except Exception as e:
                 print(f"[Communicator] Error leyendo la BD: {e}. Usando estado temporal.")
                 current_state = {}
+
             updated_state = activity_collector_node(
                 state=current_state,
                 new_activity=" ".join(conversation)
@@ -47,6 +51,7 @@ class Communicator:
             except Exception as e:
                 print(f"[Communicator] Error guardando estado en BD: {e}")
 
+            # Generamos respuesta final
             goal_state = goal_finder_node(author_id, self.db_manager)
             if "respuesta_inicial" in goal_state.get("general_info", {}):
                 reply = goal_state["general_info"]["respuesta_inicial"]
@@ -61,17 +66,16 @@ class Communicator:
         else:
             await send_dm(author_id, "Mensaje recibido, sigo escuchando...")
 
-    def start_bot(self):
-        run_bot()
 
     async def trigger_interaction(self, _user_id: str):
         print("[Communicator] Iniciando interacción (sin depender de user_id).")
         goal_state = goal_finder_node("", self.db_manager)
+
         if not goal_state.get("general_info"):
             message = "¡Hola! La base de datos no responde, pero te saludo en modo temporal."
-        elif "respuesta_inicial" in goal_state.get("general_info", {}):
+        elif "respuesta_inicial" in goal_state["general_info"]:
             message = goal_state["general_info"]["respuesta_inicial"]
         else:
             message = goal_state["short_term_info"][-1] if goal_state.get("short_term_info") else "¡Hola, algo salió raro!"
-        await send_dm("", message)
 
+        await send_dm("", message)

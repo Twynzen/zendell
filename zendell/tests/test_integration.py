@@ -3,9 +3,9 @@ import pytest
 import asyncio
 import threading
 import warnings
-from agents.communicator import Communicator
-from core.db import MongoDBManager
-from services.discord_service import run_bot
+from zendell.agents.communicator import Communicator
+from zendell.core.db import MongoDBManager
+from zendell.services.discord_service import run_bot
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
