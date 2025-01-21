@@ -1,5 +1,6 @@
 # agents/communicator.py
 import asyncio
+from datetime import datetime
 from services.discord_service import register_message_callback, send_dm, run_bot
 from core.db import MongoDBManager
 from agents.goal_finder import goal_finder_node
@@ -18,6 +19,14 @@ class Communicator:
 
     async def on_user_message(self, message_text: str, author_id: str):
         print(f"[Communicator] Mensaje recibido de user_id={author_id}: {message_text}")
+        conversation_log = {
+        "user_id": author_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "message": message_text,
+        "is_bot": False  # O True si fuera la respuesta del bot
+        }
+        self.db_manager.conversations_coll.insert_one(conversation_log)
+
         conversation = self.conversations.get(author_id, [])
         conversation.append(message_text)
         self.conversations[author_id] = conversation

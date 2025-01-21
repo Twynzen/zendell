@@ -53,7 +53,7 @@ def goal_finder_node(user_id: str, db_manager, hours_between_interactions: int =
     if not state.get("customer_name"):
         context_prompt = (
             "Primera vez con este usuario. Necesitas saber su nombre, ocupación, sueños y gustos. "
-            "Genera un mensaje cordial que lo invite a presentarse."
+            "Genera un mensaje cordial que lo invite a presentarse, debes también presentarte y debes recordar que eres un sistema multiagente llamado Zendell."
         )
     else:
         recent_activities = ", ".join(state["short_term_info"][-3:]) if state["short_term_info"] else "Ninguna"
