@@ -11,6 +11,7 @@ close_app_task = None
 intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True  # Asegura que tenemos la intención de leer guilds
+intents.message_content = True
 
 client = discord.Client(intents=intents)
 client.communicator = None

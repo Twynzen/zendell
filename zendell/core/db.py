@@ -1,33 +1,25 @@
 # core/db.py
-from datetime import datetime, timezone
+
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
-# Nota: Si vas a usar Docker con la URI:
 MONGO_URL = "mongodb://root:rootpass@localhost:27017/?authSource=admin"
-# Ajusta usuario y pass según tu docker-compose
 
 class MongoDBManager:
     def __init__(self, uri: str = MONGO_URL, db_name: str = "zendell_db"):
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
 
-        # Ejemplo de colecciones:
         self.users_coll = self.db["users"]
         self.user_state_coll = self.db["user_states"]
         self.activities_coll = self.db["activities"]
         self.goals_coll = self.db["goals"]
         self.conversations_coll = self.db["conversation_logs"]
-    
+
     def get_state(self, user_id: str) -> Dict[str, Any]:
-        """
-        Recupera el documento user_state de la colección 'user_states'.
-        Si no existe, crea un estado inicial y lo retorna.
-        """
         doc = self.user_state_coll.find_one({"user_id": user_id})
-        
-        # Si el usuario no tiene estado, creamos uno nuevo por defecto
         if not doc:
             initial_state = {
                 "user_id": user_id,
@@ -35,26 +27,21 @@ class MongoDBManager:
                 "daily_interaction_count": 0,
                 "last_interaction_date": "",
                 "short_term_info": [],
-                "general_info": {}  # Aseguramos que 'general_info' esté siempre presente
+                "general_info": {},
+                "customer_name": "",   # <-- AÑADIDO para guardar nombre de usuario
+                "mood_overall": "",
+                "last_summary": ""
             }
             self.user_state_coll.insert_one(initial_state)
             return initial_state
+        
+        # Nos aseguramos de devolver un dict que contenga 'customer_name'
+        doc.setdefault("customer_name", "")
+        doc.setdefault("mood_overall", "")
+        doc.setdefault("last_summary", "")
+        return doc
 
-        return {
-            "user_id": doc["user_id"],
-            "last_interaction_time": doc.get("last_interaction_time", ""),
-            "daily_interaction_count": doc.get("daily_interaction_count", 0),
-            "last_interaction_date": doc.get("last_interaction_date", ""),
-            "short_term_info": doc.get("short_term_info", []),
-            "general_info": doc.get("general_info", {})  # Aseguramos estructura correcta
-        }
-
-    
     def save_state(self, user_id: str, state: Dict[str, Any]) -> None:
-        """
-        Inserta o actualiza un user_state en 'user_states'.
-        Se asegura de mantener la estructura base.
-        """
         query = {"user_id": user_id}
         update_data = {
             "user_id": user_id,
@@ -62,21 +49,48 @@ class MongoDBManager:
             "daily_interaction_count": state.get("daily_interaction_count", 0),
             "last_interaction_date": state.get("last_interaction_date", ""),
             "short_term_info": state.get("short_term_info", []),
-            "general_info": state.get("general_info", {})  # Garantizar existencia
+            "general_info": state.get("general_info", {}),
+            "mood_overall": state.get("mood_overall", ""),
+            "last_summary": state.get("last_summary", ""),
+            "customer_name": state.get("customer_name", "")
         }
-
         self.user_state_coll.update_one(query, {"$set": update_data}, upsert=True)
 
-    
-    # Ejemplo para Activities
-    def add_activity(self, user_id: str, activity_data: Dict[str, Any]):
-        """
-        Inserta una actividad en 'activities'.
-        """
-        activity_data["user_id"] = user_id
-        activity_data["timestamp"] = datetime.utcnow().isoformat()
-        # Podrías crear tu propio activity_id con ObjectId, o un str random
-        activity_data["activity_id"] = str(ObjectId())
-        self.activities_coll.insert_one(activity_data)
-    
-    # Podrías seguir con "get_activities(user_id)" o "save_goal()", etc.
+    def log_message(
+        self,
+        user_id: str,
+        message: str,
+        is_bot: bool,
+        speaker_name: str,
+        agent_name: str = "communicator",
+        conversation_id: Optional[str] = None
+    ):
+        log_data = {
+            "user_id": user_id,
+            "timestamp": datetime.utcnow(),
+            "message": message,
+            "is_bot": is_bot,
+            "speaker_name": speaker_name,
+            "agent_name": agent_name,
+        }
+        if conversation_id:
+            log_data["conversation_id"] = conversation_id
+        
+        self.conversations_coll.insert_one(log_data)
+
+    def get_conversation_history(
+        self,
+        user_id: str,
+        limit: int = 20,
+        conversation_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        query = {"user_id": user_id}
+        if conversation_id:
+            query["conversation_id"] = conversation_id
+        
+        cursor = (
+            self.conversations_coll.find(query)
+            .sort("timestamp", 1)
+            .limit(limit)
+        )
+        return list(cursor)
