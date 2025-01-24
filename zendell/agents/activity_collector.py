@@ -1,36 +1,60 @@
-# /agents/activity_collector.py
+# zendell/agents/activity_collector.py
 
-from typing import TypedDict, Optional, List, Dict
-from services.llm_provider import ask_gpt
+from typing import TypedDict, Optional, List, Dict, Any
 from datetime import datetime
+from zendell.services.llm_provider import ask_gpt
+from zendell.core.db import MongoDBManager
 
+# Podrías definir un State TypedDict si gustas, 
+# pero usaré un dict generico para la interfaz con langgraph.
+# El 'global_state' vendrá con user_id, etc.
 
-class State(TypedDict):
-    customer_name: str
-    activities: List[Dict[str, str]]
-    last_activity_time: str
-    connected_channel: str  # ID o nombre del canal donde se envió la comunicación.
-    last_connection_info: str  # Podría ser un timestamp con info del canal
+def activity_collector_node(global_state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    1. Recibe el 'global_state' con la info del usuario y el último mensaje (si aplica).
+    2. Llama a LLM para clasificar la actividad/mensaje en una categoría.
+    3. Almacena la actividad en DB y retorna un 'global_state' actualizado.
+    """
+    user_id = global_state.get("user_id", "unknown_user")
+    last_message = global_state.get("last_message", "")
+    if not last_message:
+        # Si no hay mensaje que procesar, devolvemos el state tal cual
+        return global_state
 
+    # Instanciamos el DBManager (en un proyecto real, se inyecta o se maneja de otro modo)
+    db_manager = MongoDBManager()
 
-def activity_collector_node(
-    state: dict,  # Usamos dict para ser flexible con los campos
-    new_activity: Optional[str] = None,
-    channel_info: Optional[str] = None  # Nuevo parámetro opcional para el canal
-) -> dict:
-    if "activities" not in state or state["activities"] is None:
-        state["activities"] = []
+    # Guardar el mensaje del usuario en la DB como nuevo "mensaje" en conversation_logs
+    db_manager.save_conversation_message(
+        user_id=user_id,
+        role="user",
+        content=last_message,
+        extra_data={"step": "activity_collector"}  # Puedes añadir más metadatos
+    )
 
-    if new_activity:
-        prompt = f"Clasifica la siguiente actividad en una de estas categorías: Trabajo, Descanso, Ejercicio, Ocio, Otro. Actividad: '{new_activity}'. Responde solo con la categoría."
-        activity_type = ask_gpt(prompt)
-        state["activities"].append({"activity": new_activity, "type": activity_type})
+    # Usamos GPT para clasificar la actividad
+    prompt = (
+        f"Clasifica el siguiente texto en una de estas categorías: "
+        f"['Trabajo','Descanso','Ejercicio','Ocio','Otro'].\n"
+        f"Texto: '{last_message}'\n"
+        f"Responde solo con la categoría."
+    )
+    activity_type = ask_gpt(prompt)
+    if not activity_type:
+        activity_type = "Otro"
 
-    state["last_activity_time"] = datetime.now().isoformat()
-    
-    if channel_info:
-        state["connected_channel"] = channel_info
-        state["last_connection_info"] = f"Conexión registrada a las {state['last_activity_time']} en {channel_info}"
+    # Insertar la actividad en la DB
+    activity_data = {
+        "activity": last_message,
+        "type": activity_type
+    }
+    db_manager.add_activity(user_id, activity_data)
 
-    return state
+    # Actualizar el estado local (en RAM) 
+    # - Se asume que 'activities' es un list[dict]
+    if "activities" not in global_state:
+        global_state["activities"] = []
+    global_state["activities"].append(activity_data)
 
+    # Devolvemos el global_state
+    return global_state
