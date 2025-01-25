@@ -4,15 +4,7 @@ import discord
 import asyncio
 import os
 from config.settings import DISCORD_BOT_TOKEN
-
-"""
-Este módulo maneja la conexión con Discord. 
-Define el cliente, on_ready, on_message, etc.
-Lo fundamental para tu caso es:
- - En 'on_ready' buscamos un canal "enviable" y lo guardamos como 'client.default_channel'.
- - Luego, con 'delayed_trigger_interaction()', esperamos unos segundos y 
-   llamamos 'communicator.trigger_interaction' para que el bot envíe el primer mensaje.
-"""
+from zendell.services.llm_provider import ask_gpt
 
 close_app_task = None
 intents = discord.Intents.default()
@@ -23,8 +15,7 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 client.communicator = None
 client.first_ready = False
-client.default_channel = None  # Almacenaremos aquí el canal "enviable"
-
+client.default_channel = None
 
 @client.event
 async def on_ready():
@@ -39,72 +30,76 @@ async def on_ready():
                 print(f"  -> Canal: {channel.name} (ID: {channel.id}) - Enviable")
                 if not found_channel:
                     found_channel = channel
-            else:
-                print(f"  -> Canal: {channel.name} (ID: {channel.id}) - SIN PERMISO")
 
-    # Asignamos el primer canal encontrable donde el bot tiene permisos
     client.default_channel = found_channel
     print(f"[DEBUG] client.default_channel asignado: {client.default_channel}")
 
     if not client.first_ready:
         client.first_ready = True
-        if client.communicator:
-            print("[DISCORD] on_ready: Se programará la interacción inicial del Communicator...")
-            asyncio.create_task(delayed_trigger_interaction())
+        # Envía el primer mensaje (usando GPT) sin asociarlo a un user_id
+        asyncio.create_task(send_first_message_system())
 
-
-async def delayed_trigger_interaction():
+async def send_first_message_system():
     """
-    Esperamos unos segundos a que todo esté listo, 
-    y luego llamamos a 'trigger_interaction' para que el bot 
-    envíe su primer mensaje.
+    Genera con GPT el primer mensaje de saludo y lo envía al canal por defecto,
+    sin vincularlo a un user_id, para evitar crear user_states con un ID ficticio.
     """
-    await asyncio.sleep(5.0)
-    if client.communicator:
-        print("[DISCORD] delayed_trigger_interaction: Llamando a trigger_interaction...")
-        # Aquí puedes usar un user_id real o dejarlo en blanco si tu Communicator 
-        # maneja un 'broadcast' a varios usuarios, etc.
-        await client.communicator.trigger_interaction("1234567890")
+    await asyncio.sleep(3.0)  # breve espera para asegurar que todo esté listo
 
+    if not client.default_channel:
+        print("[DISCORD] No hay un canal por defecto configurado (default_channel=None).")
+        return
+
+    # Llamamos a GPT para generar un saludo inicial
+    prompt = (
+        "Eres Zendell, un sistema multiagente. Genera un mensaje de presentación amistoso "
+        "para saludar a quien lea este canal, invitando a que se presenten con su nombre, gustos y metas."
+    )
+    greeting = ask_gpt(prompt)
+    if not greeting:
+        greeting = "¡Hola! Soy Zendell, listo para asistirte."
+
+    # Enviamos al canal por defecto
+    try:
+        msg_sent = await client.default_channel.send(greeting)
+        print(f"[DISCORD] Primer mensaje (sistema) enviado: {greeting}")
+    except Exception as e:
+        print(f"[DISCORD] Error enviando el primer mensaje: {e}")
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    # Si content está vacío, intentamos usar clean_content
-    raw_msg = message.content.strip()
-    if not raw_msg:
-        raw_msg = message.clean_content.strip()
+    # Evitamos vacíos si es un reply con mención, etc.
+    raw_msg = message.content.strip() or message.clean_content.strip()
 
     print(f"[DISCORD] on_message => raw content: '{message.content}' | clean: '{message.clean_content}'")
 
+    # Delegamos al communicator si existe
     if client.communicator and hasattr(client.communicator, "on_user_message"):
         await client.communicator.on_user_message(
             raw_msg,
             str(message.author.id)
         )
 
-
 async def send_dm(_user_id: str, text: str):
     """
-    Enviamos mensajes al canal por defecto. 
-    Si quisieras enviar un DM directo, tendrías que 
-    buscar el user y hacer user.send(...) 
+    Envía un mensaje al canal por defecto por simplicidad.
+    (Podrías enviar DM directo si obtienes discord.User)
     """
     channel = client.default_channel
     if not channel:
-        print("[DISCORD] No hay un canal por defecto configurado (default_channel=None).")
+        print("[DISCORD] No hay un canal por defecto (default_channel=None).")
         return
 
-    await asyncio.sleep(1.0)  # Pequeño margen
+    await asyncio.sleep(0.5)
     try:
-        result = await channel.send(text)
+        sent = await channel.send(text)
         print(f"[DISCORD] Mensaje enviado al canal {channel.id}: {text}")
-        return result
+        return sent
     except Exception as e:
-        print(f"[DISCORD] Error enviando el mensaje: {e}")
-
+        print(f"[DISCORD] Error enviando mensaje: {e}")
 
 async def start_bot():
     """
@@ -114,14 +109,9 @@ async def start_bot():
     await asyncio.sleep(1)
     await client.connect()
 
-
 async def schedule_app_close(timeout_minutes: int):
-    """
-    Ejemplo de tarea para cerrar la app si no hay interacción 
-    en un cierto tiempo. (Opcional)
-    """
     print("[DISCORD] Timer de cierre iniciado")
     await asyncio.sleep(timeout_minutes * 60)
-    print("[DISCORD] No hubo respuesta del usuario en el tiempo límite. Cerrando aplicación...")
+    print("[DISCORD] Cerrando aplicación por inactividad...")
     await client.close()
     os._exit(0)

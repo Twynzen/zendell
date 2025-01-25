@@ -1,7 +1,5 @@
-# main.py
 import asyncio
 import warnings
-
 from datetime import datetime
 from zendell.core.db import MongoDBManager
 from zendell.agents.communicator import Communicator
@@ -10,51 +8,48 @@ from zendell.services.discord_service import client, start_bot
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-async def hourly_interaction_loop(communicator, user_ids):
+async def hourly_interaction_loop(communicator):
     """
-    Ejemplo de rutina que cada cierto tiempo (1 hora) 
-    llama a 'communicator.trigger_interaction(user_id)'
-    para ejecutar la lógica de goal_finder, etc.
+    Rutina que cada cierto tiempo (1 hora) llama a 'communicator.trigger_interaction(user_id)'
+    para ejecutar la lógica de goal_finder con todos los usuarios reales.
     """
     while True:
+        # Leer los user_ids desde la base de datos
+        user_ids = communicator.db_manager.user_state_coll.distinct("user_id")
         for user_id in user_ids:
-            await communicator.trigger_interaction(user_id)
-        # Esperamos 1 hora
+            if user_id:  # Asegurarnos de no procesar IDs vacíos
+                print(f"[HOURLY INTERACTION] Iniciando interacción con user_id: {user_id}")
+                await communicator.trigger_interaction(user_id)
+        # Esperar 1 hora antes del próximo ciclo
         await asyncio.sleep(3600)
 
 
 async def main_async():
     """
-    Arranque principal de la aplicación.
+    Arranque principal de la aplicación:
     1. Instancia MongoDBManager y Communicator.
     2. Inicia el bot de Discord.
-    3. (Opcional) Lanza una tarea en segundo plano 
-       para interacciones cada hora.
+    3. Lanza una tarea en segundo plano para las interacciones cíclicas por hora.
     """
     db_manager = MongoDBManager(
         uri="mongodb://root:rootpass@localhost:27017/?authSource=admin",
         db_name="zendell_db"
     )
 
-    # Creamos el Communicator y se lo inyectamos al Discord client.
+    # Creamos el Communicator y se lo inyectamos al cliente de Discord
     communicator = Communicator(db_manager)
     client.communicator = communicator
 
     print("[MAIN] Iniciando bot de Discord con login/connect...")
 
-    # Esta lista de user_ids podría venir de la base de datos,
-    # o un config. Por simplicidad, agregamos un ejemplo estático.
-    user_ids_to_check = ["1234567890"]  # Reemplaza con IDs reales de tu proyecto.
-
-    # Iniciamos dos tareas en paralelo:
-    # 1) la conexión del bot a Discord
-    # 2) el loop que cada hora llama a communicator.trigger_interaction
+    # Iniciamos las tareas paralelas:
+    # 1. La conexión del bot a Discord
+    # 2. El loop que cada hora llama a communicator.trigger_interaction
     loop = asyncio.get_event_loop()
     task_bot = loop.create_task(start_bot())
-    task_hourly = loop.create_task(hourly_interaction_loop(communicator, user_ids_to_check))
+    task_hourly = loop.create_task(hourly_interaction_loop(communicator))
 
-    # Esperamos a que las dos tareas terminen (aunque la del bot 
-    # se ejecuta hasta desconexión)
+    # Esperamos a que ambas tareas terminen
     await asyncio.gather(task_bot, task_hourly)
 
 
