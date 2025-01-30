@@ -1,74 +1,64 @@
 # zendell/agents/orchestrator.py
-
 from typing import Dict, Any
-from zendell.agents.goal_finder import goal_finder_node
+from zendell.core.db import MongoDBManager
 from zendell.agents.activity_collector import activity_collector_node
 from zendell.agents.analyzer import analyzer_node
 from zendell.agents.recommender import recommender_node
-from zendell.core.db import MongoDBManager
 
-# Fijamos un ID único porque es un sistema para un solo usuario
-SINGLE_USER_ID = "my_unique_user"
-
-def initiate_conversation() -> str:
+def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
     """
-    Llamado cuando el sistema decide iniciar (de forma proactiva)
-    la conversación con el usuario. Retorna el mensaje que se debe enviar.
-    """
-    db_manager = MongoDBManager()
-    # Llamamos al goal_finder_node que determina si procede o no
-    # iniciar la conversación y genera el mensaje inicial
-    final_state = goal_finder_node(SINGLE_USER_ID)
+    Orquesta todo el pipeline:
+      1) activity_collector_node
+      2) analyzer_node
+      3) recommender_node
 
-    # goal_finder_node retorna el estado, donde típicamente hemos guardado
-    # la respuesta en conversation_logs. Para obtener el mensaje:
-    last_assistant_msg = db_manager.get_last_assistant_message(SINGLE_USER_ID)
-
-    if last_assistant_msg:
-        return last_assistant_msg
-    else:
-        return "Error: No se generó un mensaje de inicio."
-
-
-def process_user_response(user_message: str) -> str:
-    """
-    Llamado cuando el usuario contesta. Orquesta el pipeline:
-    1) activity_collector -> 2) analyzer -> 3) recommender
-    Retorna el mensaje final (ej. las recomendaciones).
+    Retorna un dict con:
+      {
+        "global_state": ...,
+        "final_text": ...
+      }
     """
     db_manager = MongoDBManager()
+    
+    # Obtenemos (o creamos) el user_state de la BD
+    user_state = db_manager.get_state(user_id)
 
-    # Construimos un 'global_state' básico
+    # Construimos el global_state, puedes agregar más campos si gustas
     global_state = {
-        "user_id": SINGLE_USER_ID,
-        "last_message": user_message,
+        "user_id": user_id,
+        "customer_name": user_state.get("name", "Desconocido"),
         "activities": [],
         "analysis": {},
-        "recommendation": []
+        "recommendation": [],
+        "last_message": last_message,
+        "conversation_context": []
     }
 
-    # 1) activity_collector
+    # 1. Recopilamos datos del mensaje del usuario
     global_state = activity_collector_node(global_state)
 
-    # 2) analyzer
+    # 2. Analizamos las actividades registradas (si las hay)
     global_state = analyzer_node(global_state)
 
-    # 3) recommender
+    # 3. Generamos recomendaciones finales
     global_state = recommender_node(global_state)
 
-    # Podríamos unificar las recomendaciones en un texto final
-    rec_list = global_state.get("recommendation", [])
-    if rec_list:
-        final_text = "Aquí tienes algunas recomendaciones:\n" + "\n".join(rec_list)
+    # Elaboramos un texto de salida
+    recs = global_state.get("recommendation", [])
+    if recs:
+        final_text = "Aquí tienes algunas recomendaciones:\n" + "\n".join(recs)
     else:
-        final_text = "¡Gracias por la info! Por ahora no tengo recomendaciones."
+        final_text = "He registrado tu mensaje. ¡Gracias!"
 
-    # Guardamos ese final_text en conversation_logs (opcional)
+    # Guardamos ese final_text como mensaje de 'assistant'
     db_manager.save_conversation_message(
-        user_id=SINGLE_USER_ID,
+        user_id=user_id,
         role="assistant",
         content=final_text,
         extra_data={"step": "orchestrator_flow"}
     )
 
-    return final_text
+    return {
+        "global_state": global_state,
+        "final_text": final_text
+    }
