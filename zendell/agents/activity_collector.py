@@ -63,9 +63,8 @@ Extrae los siguientes datos en formato JSON:
 Si no menciona algo, deja ese campo como string vacío.
 """
     extract_response = ask_gpt(extract_prompt)
-    print("[activity_collector] GPT extract response raw:", extract_response)
-
     if extract_response:
+        extract_response = extract_response.replace("```json", "").replace("```", "").strip()
         try:
             extracted = json.loads(extract_response)
         except json.JSONDecodeError:
