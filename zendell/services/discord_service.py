@@ -5,6 +5,7 @@ import asyncio
 import os
 from config.settings import DISCORD_BOT_TOKEN
 from zendell.services.llm_provider import ask_gpt
+from zendell.core.db import MongoDBManager  # <-- Necesitamos el db_manager para guardar el primer msg
 
 close_app_task = None
 intents = discord.Intents.default()
@@ -36,33 +37,42 @@ async def on_ready():
 
     if not client.first_ready:
         client.first_ready = True
-        # Envía el primer mensaje (usando GPT) sin asociarlo a un user_id
         asyncio.create_task(send_first_message_system())
 
 async def send_first_message_system():
     """
-    Genera con GPT el primer mensaje de saludo y lo envía al canal por defecto,
-    sin vincularlo a un user_id, para evitar crear user_states con un ID ficticio.
+    Genera con GPT el primer mensaje de saludo y lo envía al canal por defecto.
+    Lo guarda en la DB con un user_id genérico "system_init".
     """
-    await asyncio.sleep(3.0)  # breve espera para asegurar que todo esté listo
+    await asyncio.sleep(3.0)
 
     if not client.default_channel:
         print("[DISCORD] No hay un canal por defecto configurado (default_channel=None).")
         return
 
-    # Llamamos a GPT para generar un saludo inicial
+    # Prompt para GPT: generamos el primer saludo
     prompt = (
-        "Eres Zendell, un sistema multiagente. Genera un mensaje de presentación amistoso "
-        "para saludar a quien lea este canal, invitando a que se presenten con su nombre, gustos y metas."
+        "Eres Zendell, un sistema multiagente. Genera un mensaje de presentación amistoso en español. "
+        "Saluda al usuario, explícale brevemente que eres un asistente y que te gustaría conocer su nombre, "
+        "ocupación, gustos y metas. Indícale que estás para ayudarle. Sé amigable."
     )
     greeting = ask_gpt(prompt)
     if not greeting:
-        greeting = "¡Hola! Soy Zendell, listo para asistirte."
+        greeting = "¡Hola! Soy Zendell, tu asistente multiagente. ¿Podrías presentarte?"
 
-    # Enviamos al canal por defecto
     try:
-        msg_sent = await client.default_channel.send(greeting)
+        # 1) Enviar mensaje al canal
+        await client.default_channel.send(greeting)
         print(f"[DISCORD] Primer mensaje (sistema) enviado: {greeting}")
+
+        # 2) Guardar en DB
+        db_manager = MongoDBManager()
+        db_manager.save_conversation_message(
+            user_id="system_init",
+            role="assistant",
+            content=greeting,
+            extra_data={"step": "first_message_system"}
+        )
     except Exception as e:
         print(f"[DISCORD] Error enviando el primer mensaje: {e}")
 
@@ -71,23 +81,14 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # Evitamos vacíos si es un reply con mención, etc.
     raw_msg = message.content.strip() or message.clean_content.strip()
-
     print(f"[DISCORD] on_message => raw content: '{message.content}' | clean: '{message.clean_content}'")
 
     # Delegamos al communicator si existe
     if client.communicator and hasattr(client.communicator, "on_user_message"):
-        await client.communicator.on_user_message(
-            raw_msg,
-            str(message.author.id)
-        )
+        await client.communicator.on_user_message(raw_msg, str(message.author.id))
 
 async def send_dm(_user_id: str, text: str):
-    """
-    Envía un mensaje al canal por defecto por simplicidad.
-    (Podrías enviar DM directo si obtienes discord.User)
-    """
     channel = client.default_channel
     if not channel:
         print("[DISCORD] No hay un canal por defecto (default_channel=None).")
@@ -102,9 +103,6 @@ async def send_dm(_user_id: str, text: str):
         print(f"[DISCORD] Error enviando mensaje: {e}")
 
 async def start_bot():
-    """
-    Inicia el bot y bloquea hasta desconexión.
-    """
     await client.login(DISCORD_BOT_TOKEN)
     await asyncio.sleep(1)
     await client.connect()
