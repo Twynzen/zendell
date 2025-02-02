@@ -1,10 +1,10 @@
-# /services/llm_provider.py
+# zendell/services/llm_provider.py
 
 from openai import OpenAI
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from config.settings import OPENAI_API_KEY
 
-# Configurar el cliente de OpenAI
+# Configurar el cliente de OpenAI con la API key
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 def ask_gpt(
@@ -13,10 +13,8 @@ def ask_gpt(
     temperature: float = 0.7
 ) -> Optional[str]:
     """
-    Envía un mensaje 'prompt' al modelo de OpenAI y devuelve la respuesta como string.
-    - prompt: texto que enviaremos al modelo.
-    - model: nombre del modelo a usar (ej: gpt-4, gpt-3.5-turbo, etc.).
-    - temperature: control de creatividad (0 = menos creativo, 1 = más creativo).
+    Envía un 'prompt' al modelo (estilo ChatCompletion) y retorna la respuesta de GPT.
+    Usa el patrón 'openai_client.chat.completions.create' que solicitaste.
     """
     try:
         response = openai_client.chat.completions.create(
@@ -24,9 +22,27 @@ def ask_gpt(
             messages=[{"role": "user", "content": prompt}],
             temperature=temperature
         )
-        # Accedemos correctamente al contenido de la respuesta
         return response.choices[0].message.content.strip()
-
     except Exception as e:
         print(f"[ERROR] al preguntar a GPT: {e}")
+        return None
+
+def ask_gpt_chat(
+    messages: List[Dict[str, str]],
+    model: str = "gpt-4o",
+    temperature: float = 0.7
+) -> Optional[str]:
+    """
+    Envía una lista 'messages' (cada item con 'role' y 'content')
+    y retorna la respuesta del 'assistant'.
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[ERROR] al preguntar a GPT (chat mode): {e}")
         return None

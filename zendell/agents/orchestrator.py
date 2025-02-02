@@ -5,59 +5,65 @@ from zendell.core.db import MongoDBManager
 from zendell.agents.activity_collector import activity_collector_node
 from zendell.agents.analyzer import analyzer_node
 from zendell.agents.recommender import recommender_node
-from zendell.services.llm_provider import ask_gpt
+from zendell.services.llm_provider import ask_gpt_chat
 
-def missing_profile_fields(user_state: dict) -> list:
-    """
-    Chequea si faltan: name, ocupacion, gustos, metas.
-    Devuelve una lista con lo que falta.
-    """
-    missing = []
-    if user_state.get("name", "Desconocido") in ["", "Desconocido"]:
-        missing.append("name")
-    general = user_state.get("general_info", {})
-    if not general.get("ocupacion", ""):
-        missing.append("ocupacion")
-    if not general.get("gustos", ""):
-        missing.append("gustos")
-    if not general.get("metas", ""):
-        missing.append("metas")
-    return missing
-
-def is_profile_complete(user_state: dict) -> bool:
-    return len(missing_profile_fields(user_state)) == 0
+def missing_profile_fields(state: dict) -> list:
+    fields = []
+    if state.get("name", "Desconocido") in ["", "Desconocido"]:
+        fields.append("name")
+    info = state.get("general_info", {})
+    if not info.get("ocupacion", ""):
+        fields.append("ocupacion")
+    if not info.get("gustos", ""):
+        fields.append("gustos")
+    if not info.get("metas", ""):
+        fields.append("metas")
+    return fields
 
 def get_time_ranges() -> dict:
-    """
-    Retorna un dict con horas aproximadas para la última hora y la siguiente hora.
-    """
     now = datetime.now()
-    one_hour_ago = (now - timedelta(hours=1)).strftime("%H:%M")
-    now_str = now.strftime("%H:%M")
-    one_hour_future = (now + timedelta(hours=1)).strftime("%H:%M")
-
     return {
         "last_hour": {
-            "start_time": one_hour_ago,
-            "end_time": now_str
+            "start": (now - timedelta(hours=1)).strftime("%H:%M"),
+            "end": now.strftime("%H:%M")
         },
         "next_hour": {
-            "start_time": now_str,
-            "end_time": one_hour_future
+            "start": now.strftime("%H:%M"),
+            "end": (now + timedelta(hours=1)).strftime("%H:%M")
         }
     }
 
+def build_system_context(db: MongoDBManager, user_id: str, stage: str) -> str:
+    state = db.get_state(user_id)
+    name = state.get("name", "Desconocido")
+    st_info = state.get("short_term_info", [])
+    last_notes = ". ".join(st_info[-3:]) if st_info else ""
+    context = f"Usuario: {name}. Últimas notas: {last_notes}. Etapa: {stage}. "
+    context += (
+        "Tu objetivo es conocer y ayudar al usuario, usando la información de la base de datos. "
+        "No te excuses de no tener capacidad. Responde con seguridad y claridad. "
+        "Si el usuario habló de sus actividades, puedes recordárselas o profundizar en ellas. "
+    )
+    return context
+
+def ask_gpt_in_context(db: MongoDBManager, user_id: str, user_prompt: str, stage: str) -> str:
+    system_text = build_system_context(db, user_id, stage)
+    logs = db.get_user_conversation(user_id, limit=8)
+    chat = [{"role": "system", "content": system_text}]
+    for msg in logs:
+        role = "assistant" if msg["role"] == "assistant" else "user"
+        chat.append({"role": role, "content": msg["content"]})
+    chat.append({"role": "user", "content": user_prompt})
+    response = ask_gpt_chat(chat, model="gpt-3.5-turbo", temperature=0.7)
+    return response if response else "¿Podrías repetirme lo que necesitas?"
+
 def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
-    db_manager = MongoDBManager()
-    user_state = db_manager.get_state(user_id)
-
-    # Leemos o creamos el stage
-    conversation_stage = user_state.get("conversation_stage", "initial")
-
-    # Construimos el global_state. Le agregaremos "time_context" según la etapa
+    db = MongoDBManager()
+    state = db.get_state(user_id)
+    stage = state.get("conversation_stage", "initial")
     global_state = {
         "user_id": user_id,
-        "customer_name": user_state.get("name", "Desconocido"),
+        "customer_name": state.get("name", "Desconocido"),
         "activities": [],
         "analysis": {},
         "recommendation": [],
@@ -65,133 +71,67 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         "conversation_context": []
     }
 
-    # 1) Llamamos activity_collector para parsear datos (nombre, actividades, etc.)
     global_state = activity_collector_node(global_state)
-    # Releer user_state por si se guardaron más datos
-    user_state = db_manager.get_state(user_id)
+    state = db.get_state(user_id)
+    missing = missing_profile_fields(state)
+    tmap = get_time_ranges()
+    reply = ""
 
-    # Chequeamos si ya se completó el perfil
-    missing_fields = missing_profile_fields(user_state)
-    profile_done = (len(missing_fields) == 0)
-
-    # Tomamos rangos de hora
-    time_map = get_time_ranges()
-
-    # Comportamiento según stage
-    if conversation_stage == "initial":
-        # si ya está completo el perfil, pasamos a ask_last_hour
-        if profile_done:
-            conversation_stage = "ask_last_hour"
-            # Guardamos en global_state que la siguiente respuesta describe la última hora
-            global_state["time_context"] = "last_hour"
-            global_state["time_range"] = time_map["last_hour"]
-
-            # GPT: preguntamos qué hizo en la última hora
-            assistant_reply = ask_gpt(build_prompt_ask_last_hour(last_message, user_state, global_state))
+    if stage == "initial":
+        if missing:
+            stage = "ask_profile"
+            needed = ", ".join(missing)
+            prompt = f"Faltan estos datos: {needed}. ¿Podrías compartirlos?"
+            reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
-            # Falta algún dato => pedirlo
-            assistant_reply = ask_gpt(build_prompt_missing_profile(last_message, user_state, missing_fields))
+            stage = "ask_last_hour"
+            prompt = f"{state['name']}, ¿qué hiciste entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}?"
+            reply = ask_gpt_in_context(db, user_id, prompt, stage)
 
-    elif conversation_stage == "ask_last_hour":
-        # Ahora pasamos a ask_next_hour
-        conversation_stage = "ask_next_hour"
+    elif stage == "ask_profile":
+        if missing:
+            needed = ", ".join(missing)
+            prompt = f"Aún faltan: {needed}. ¿Podrías brindarlos?"
+            reply = ask_gpt_in_context(db, user_id, prompt, stage)
+        else:
+            stage = "ask_last_hour"
+            prompt = f"{state['name']}, ¿qué hiciste entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}?"
+            reply = ask_gpt_in_context(db, user_id, prompt, stage)
 
-        # Indicamos que la siguiente respuesta describe la próxima hora
-        global_state["time_context"] = "next_hour"
-        global_state["time_range"] = time_map["next_hour"]
+    elif stage == "ask_last_hour":
+        stage = "ask_next_hour"
+        prompt = (
+            f"{state['name']}, ahora cuéntame qué planeas hacer entre "
+            f"{tmap['next_hour']['start']} y {tmap['next_hour']['end']}."
+        )
+        reply = ask_gpt_in_context(db, user_id, prompt, stage)
 
-        assistant_reply = ask_gpt(build_prompt_ask_next_hour(last_message, user_state, global_state))
-
-    elif conversation_stage == "ask_next_hour":
-        # Ya preguntamos la próxima hora => pasamos a final
-        conversation_stage = "final"
-        assistant_reply = ask_gpt(build_prompt_final(last_message, user_state))
-
-    else:  # "final"
-        # Podemos hacer analyzer + recommender
+    elif stage == "ask_next_hour":
+        stage = "final"
         global_state = analyzer_node(global_state)
         global_state = recommender_node(global_state)
         recs = global_state.get("recommendation", [])
-
-        base_reply = ask_gpt(build_prompt_final(last_message, user_state))
-        if not base_reply:
-            base_reply = "Gracias por la info. ¿Deseas algo más?"
+        base_prompt = "¿Necesitas alguna sugerencia extra o aclaración?"
+        base_ans = ask_gpt_in_context(db, user_id, base_prompt, stage)
         if recs:
-            assistant_reply = base_reply + "\n\nAquí tienes mis sugerencias:\n" + "\n".join(recs)
+            rec_text = "\n".join(recs)
+            reply = f"{base_ans}\n\nSugerencias:\n{rec_text}"
         else:
-            assistant_reply = base_reply
+            reply = base_ans
 
-    # Actualizamos stage y guardamos user_state
-    user_state["conversation_stage"] = conversation_stage
-    db_manager.save_state(user_id, user_state)
+    else:
+        global_state = analyzer_node(global_state)
+        global_state = recommender_node(global_state)
+        recs = global_state.get("recommendation", [])
+        final_prompt = "¿En qué más puedo apoyarte ahora mismo?"
+        final_ans = ask_gpt_in_context(db, user_id, final_prompt, stage)
+        if recs:
+            rec_text = "\n".join(recs)
+            reply = f"{final_ans}\n\nSugerencias:\n{rec_text}"
+        else:
+            reply = final_ans
 
-    # Guardamos assistant reply en conversation_logs
-    db_manager.save_conversation_message(
-        user_id=user_id,
-        role="assistant",
-        content=assistant_reply,
-        extra_data={"step": "orchestrator_flow"}
-    )
-
-    return {
-        "global_state": global_state,
-        "final_text": assistant_reply
-    }
-
-# ---- PROMPTS ----
-
-def build_prompt_missing_profile(last_message: str, user_state: dict, missing_fields: list) -> str:
-    text_missing = ", ".join(missing_fields)
-    prompt = (
-        "Eres Zendell, un sistema multiagente en español. El usuario escribió:\n"
-        f"'{last_message}'\n\n"
-        "Sabes que te faltan estos datos de su perfil: "
-        f"{text_missing}.\n"
-        "Genera una respuesta amistosa y cordial, pidiéndole que comparta la información faltante. "
-        "Muestra interés y disponibilidad para ayudar."
-    )
-    return prompt
-
-def build_prompt_ask_last_hour(last_message: str, user_state: dict, global_state: dict) -> str:
-    """
-    Pregunta al usuario qué hizo en la última hora (time_range).
-    """
-    name = user_state.get("name", "Desconocido")
-    tr = global_state.get("time_range", {})
-    start = tr.get("start_time", "hace 1 hora")
-    end = tr.get("end_time", "ahora")
-
-    prompt = (
-        "Eres Zendell, un sistema multiagente amigable. El usuario dijo:\n"
-        f"'{last_message}'\n\n"
-        f"Sabes que su nombre es {name}. Quieres saber qué hizo entre {start} y {end}. "
-        "Genera una respuesta en español, invitando al usuario a describir sus actividades de la última hora."
-    )
-    return prompt
-
-def build_prompt_ask_next_hour(last_message: str, user_state: dict, global_state: dict) -> str:
-    """
-    Pregunta al usuario qué planea hacer en la próxima hora (time_range).
-    """
-    name = user_state.get("name", "Desconocido")
-    tr = global_state.get("time_range", {})
-    start = tr.get("start_time", "ahora")
-    end = tr.get("end_time", "en 1 hora")
-
-    prompt = (
-        "Eres Zendell, un sistema multiagente en español. El usuario describió su última hora:\n"
-        f"'{last_message}'\n\n"
-        f"Ahora pregúntale qué planea hacer entre {start} y {end}. "
-        "Hazlo de forma amistosa y enfocada a entender sus planes."
-    )
-    return prompt
-
-def build_prompt_final(last_message: str, user_state: dict) -> str:
-    prompt = (
-        "Eres Zendell, un sistema multiagente. El usuario acaba de decir:\n"
-        f"'{last_message}'\n\n"
-        "Ya registraste sus actividades pasadas y futuras. "
-        "Genera una respuesta breve, ofreciéndote a dar recomendaciones o despedirte "
-        "hasta la siguiente interacción."
-    )
-    return prompt
+    state["conversation_stage"] = stage
+    db.save_state(user_id, state)
+    db.save_conversation_message(user_id, "assistant", reply, {"step": "orchestrator_flow"})
+    return {"global_state": global_state, "final_text": reply}
