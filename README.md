@@ -1,9 +1,109 @@
-# ZENDELL
- Un ecosistema de múltiples agentes inteligentes que se coordinan para asistir a un usuario a lo largo de su día, recopilando y organizando información, analizando sus necesidades, brindando recordatorios, sugerencias y guía continua. Cada agente se especializa en una tarea (recolección de datos, análisis, recomendaciones, comunicación, etc.) y comparten un estado global que evoluciona con las interacciones del usuario. El objetivo es convertirse en un asistente “super inteligente” que no solo genere texto, sino que cumpla activamente los objetivos del usuario, automatizando procesos y anticipando soluciones en base a la información recibida cada hora y las metas planteadas. La idea es que el sistema sea capaz de acompañar, recordar, y ayudar de forma fluida, armoniosa y casi humana. Importante, este sistema multiagente tiene un control total, dinamico y bien establecido a la hora de guardar datos en su base de datos en mongo db. Actualmente crea un bot en discord que es capaz de interactuar con el usuario cada hora creando una conversación y extraeyendo de forma inteligente datos que permiten definir bien a su usuario y sus necesidades. Proximamente también buscará comunicarse en whtasapp y correo. Siempre buscando inciizalizar una conversación y cumplir su objetivo de extraer algo de información inclusive de un nivel general como, Nombre, Trabajo, aspiraciones, como de un nivel a corto plazo como Actividades del día, alimentación en su última hora, próxima hora de repaso para completar un aprendizaje diario. Etc Todo esto con el fin de volverse el mejor amigo del usuario y aportarle de forma real ayuda en puntualmente su día a día. Sabiendo exactamente quien es su usuario, sus necesidades y como ayudarle. 
+# ZENDELL: Ecosistema Multiagente Proactivo
+
+> **Asistente “super inteligente” que te acompaña durante el día, iniciando conversaciones, recopilando información y adaptándose a tus necesidades.**  
+
+## 1. ¿Qué es ZENDELL?
+
+ZENDELL es un conjunto de agentes inteligentes que trabajan en equipo para:
+1. **Conocer tus necesidades** y objetivos.
+2. **Anticipar** recordatorios y sugerencias.
+3. **Interactuar proactivamente** cada hora (o en intervalos configurables).
+4. **Evolucionar** contigo, guardando un perfil en una base de datos (MongoDB) y expandiendo sus funcionalidades a otros canales (Discord, WhatsApp, correo, etc.).
+
+El objetivo final es que ZENDELL sea como un “mejor amigo virtual”, siempre al tanto de lo que necesitas y dispuesto a ayudarte (sacando tu información, analizándola y recomendando acciones).
+
+## 2. Características Clave
+
+- **Conversaciones Proactivas**: No espera a que el usuario hable; cada hora (o cuando lo configures) inicia un diálogo.
+- **Agentes Especializados**: Cada módulo (collector, analyzer, recommender, communicator, etc.) se encarga de una tarea concreta.
+- **Memoria y Aprendizaje**: Gracias a la base de datos y la orquestación, ZENDELL va recordando y aprendiendo sobre el usuario.
+- **Integración con GPT**: Para generar textos, extraer información del usuario y crear recomendaciones personalizadas.
+- **Escalabilidad**: Arquitectura modular que permite añadir fácilmente nuevos agentes o servicios de mensajería.
+
+## 3. Arquitectura del Proyecto
+
+El proyecto se organiza en varias carpetas clave dentro de `zendell/`:
+
+### **1. agents/**  
+- `activity_collector.py`: Recopila actividades del usuario y las almacena en su perfil.  
+- `analyzer.py`: Analiza la información recogida para determinar estado de ánimo y patrones de comportamiento.  
+- `communicator.py`: Actúa como el “centro de mensajes”: recibe textos del usuario, los delega y guarda la conversación.  
+- `goal_finder.py`: Decide cuándo iniciar interacciones y prepara los mensajes iniciales o de seguimiento.  
+- `orchestrator.py`: Coordina el flujo completo, combinando los resultados de los demás agentes.  
+- `recommender.py`: Basándose en los análisis, da consejos y acciones prácticas.
+
+### **2. config/**  
+- `settings.py`: Guarda tokens, API keys, configuraciones varias (p. ej. `DISCORD_BOT_TOKEN`, `OPENAI_API_KEY`).  
+
+### **3. core/**  
+- `api.py`: (Opcional) Interfaz para exponer servicios vía API.  
+- `db.py`: Maneja la conexión a MongoDB (operaciones con usuarios, estados, actividades, logs).  
+- `graph.py`: Define el flujo de interacción en un grafo de estados.  
+- `utils.py`: Funciones de ayuda para validaciones, manejo de tiempos, etc.
+
+### **4. services/**  
+- `discord_service.py`: Implementa un bot de Discord que recibe y envía mensajes al usuario.  
+- `llm_provider.py`: Interfaz para llamar a OpenAI GPT.  
+- `messaging_service.py`: Pensado para integrar otros canales (WhatsApp, email, etc.).  
+
+### **5. tests/**  
+- Pruebas del sistema (por ejemplo, usando `pytest`).  
+
+Adicionalmente, hay archivos de configuración (`docker-compose.yml`, `pyproject.toml`, `requirements.txt`, etc.) para desplegar o instalar dependencias.
+
+## 4. Flujo de Ejecución
+
+### **1. Arranque (main.py)**  
+- Conecta con MongoDB a través de `MongoDBManager`.  
+- Inicia el bot de Discord (o cualquier otro canal).  
+
+### **2. Bot de Discord**  
+- Cuando se conecta, envía un saludo inicial al canal configurado.  
+- Al recibir mensajes del usuario (`on_message`), los pasa a `communicator.py` para almacenarlos y procesarlos.  
+
+### **3. Interacción Proactiva**  
+- Cada hora (configurable), se revisa la lista de usuarios activos y se dispara `communicator.trigger_interaction(user_id)`.  
+- Esto inicia el flujo del **Goal Finder**, que decide qué mensaje enviar o qué datos extraer.  
+
+### **4. Orquestación**  
+- **Orchestrator** llama a:  
+  1. **Activity Collector** → almacena nueva info.  
+  2. **Analyzer** → analiza estado de ánimo y patrones.  
+  3. **Recommender** → genera consejos o próximos pasos.  
+
+### **5. Persistencia**  
+- Todo se guarda en MongoDB: desde datos de usuario hasta logs de conversación, permitiendo rastrear el historial y mejorar la experiencia.  
+
+## 5. Funcionamiento en la Práctica
+
+Imagina que ZENDELL te pregunta cada hora cosas como:  
+- “¿Cómo te fue en tu última tarea?”  
+- “¿Has comido recientemente?”  
+- “¿Necesitas un resumen de tus pendientes?”  
+
+Dependiendo de tus respuestas, el analizador deduce tu estado de ánimo o hábitos, y el recomendador te da sugerencias concretas (“Tómate un descanso de 5 minutos”, “Revisa tu lista de pendientes antes de comer”, etc.).  
+
+## 6. Roadmap / Próximos Pasos
+
+- **Integración con WhatsApp y Email**: Ya en proceso para llegar a más canales.  
+- **Agente Bibliotecario**: Para manejar el contexto y el historial en mayor detalle.  
+- **Optimización y Nuevos Nodos**: Añadir más agentes especializados (por ejemplo, agente de hábitos saludables, agente de gestión financiera).  
+
+## 7. Requisitos e Instalación
+
+1. **Clona este repo**  
+   ```bash
+   git clone https://github.com/tu-usuario/zendell.git
+   ```
+2. **Instala dependencias** (vía `pip`, `conda` o `poetry` según tu archivo preferido)  
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Configura las credenciales** (en `zendell/config/settings.py` o variables de entorno).  
+4. **Arranca la app**  
+   ```bash
+   python main.py
+   ```
 
 
 https://www.mermaidchart.com/raw/e3f8fb68-0d1e-4097-bc9c-4302d118bfe8?theme=light&version=v0.1&format=svg
-
-
-Descripción Detallada del Sistema Multiagente
-ZENDELL es un ecosistema de agentes inteligentes diseñados para acompañar y asistir al usuario a lo largo del día, orquestando interacciones, recogiendo datos y adaptándose a las necesidades personales. Todo arranca en main.py, que inicializa el bucle asíncrono, conecta con la base de datos a través de zendell/core/db.py y levanta el bot de Discord (definido en zendell/services/discord_service.py). Cuando el bot recibe un mensaje en Discord (evento on_message), éste se redirige al agente Communicator en zendell/agents/communicator.py, que guarda el mensaje en la colección de conversaciones y, basándose en el contenido, decide qué acción tomar. Si se trata de un mensaje general o de continuidad, se invoca el goal_finder_node en zendell/agents/goal_finder.py, el cual valida el estado del usuario y, si es el momento adecuado, lanza una interacción. El corazón del sistema se encuentra en el orchestrator_flow (ubicado en zendell/agents/orchestrator.py), que coordina la ejecución de varios agentes especializados: primero, el activity_collector_node en zendell/agents/activity_collector.py extrae datos del mensaje del usuario, clasifica actividades y actualiza el perfil (incluyendo la extracción de información de perfil mediante prompts a GPT, gestionados a través de zendell/services/llm_provider.py); luego, el analyzer_node en zendell/agents/analyzer.py utiliza estos datos para analizar el tono, patrones y posibles necesidades, guardando resultados en la base de datos; y, finalmente, el recommender_node en zendell/agents/recommender.py genera sugerencias basadas en el análisis previo. Además, el sistema utiliza un grafo de estados definido en zendell/core/graph.py para marcar el flujo de interacción (desde el inicio, pasando por la recolección de datos, análisis y recomendación, hasta el cierre de la conversación) y funciones auxiliares en zendell/core/utils.py para gestionar tiempos y validaciones. Toda la lógica de persistencia, interacción y procesamiento se sustenta en MongoDB, donde se almacenan usuarios, estados, actividades y logs de conversación, permitiendo incluso, en versiones futuras, integrar un agente "bibliotecario" para gestionar la memoria y el contexto de manera dinámica.
