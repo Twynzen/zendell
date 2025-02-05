@@ -1,4 +1,5 @@
 # zendell/agents/orchestrator.py
+
 from typing import Dict, Any
 from datetime import datetime, timedelta
 from zendell.core.db import MongoDBManager
@@ -34,15 +35,21 @@ def get_time_ranges() -> dict:
     }
 
 def build_system_context(db: MongoDBManager, user_id: str, stage: str) -> str:
+    """
+    Aquí añadimos instrucciones claras para que GPT NO hable de sus
+    actividades ni se salga de contexto, sino que formule preguntas directas 
+    o dé respuestas útiles sobre el usuario.
+    """
     state = db.get_state(user_id)
     name = state.get("name", "Desconocido")
     st_info = state.get("short_term_info", [])
     last_notes = ". ".join(st_info[-3:]) if st_info else ""
-    context = f"Usuario: {name}. Últimas notas: {last_notes}. Etapa: {stage}. "
-    context += (
-        "Tu objetivo es conocer y ayudar al usuario, usando la información de la base de datos. "
-        "No te excuses de no tener capacidad. Responde con seguridad y claridad. "
-        "Si el usuario habló de sus actividades, puedes recordárselas o profundizar en ellas. "
+    context = (
+        f"El usuario se llama {name}. Últimas notas: {last_notes}. Etapa actual: {stage}. "
+        "Tu objetivo es ayudarle y preguntarle sobre sus actividades. "
+        "No hables en primera persona de tus propias acciones, no inventes datos sobre ti. "
+        "En lugar de decir 'estuve disponible', pregúntale directamente a él/ella sobre su última hora o próxima hora. "
+        "Sé breve y conciso, y mantén coherencia con lo que el usuario te dijo."
     )
     return context
 
@@ -70,7 +77,6 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         "last_message": last_message,
         "conversation_context": []
     }
-
     global_state = activity_collector_node(global_state)
     state = db.get_state(user_id)
     missing = missing_profile_fields(state)
@@ -81,28 +87,43 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         if missing:
             stage = "ask_profile"
             needed = ", ".join(missing)
-            prompt = f"Faltan estos datos: {needed}. ¿Podrías compartirlos?"
+            prompt = (
+                f"Faltan estos datos: {needed}. Por favor, proporciónalos. "
+                "No hables de nada más."
+            )
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
             stage = "ask_last_hour"
-            prompt = f"{state['name']}, ¿qué hiciste entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}?"
+            prompt = (
+                f"Pregunta al usuario '{state['name']}' qué hizo entre "
+                f"{tmap['last_hour']['start']} y {tmap['last_hour']['end']}. "
+                "No hables de tus actividades; hazle la pregunta de forma directa."
+            )
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
 
     elif stage == "ask_profile":
         if missing:
             needed = ", ".join(missing)
-            prompt = f"Aún faltan: {needed}. ¿Podrías brindarlos?"
+            prompt = (
+                f"Aún faltan: {needed}. Pide esos datos. "
+                "No hables de nada más."
+            )
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
             stage = "ask_last_hour"
-            prompt = f"{state['name']}, ¿qué hiciste entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}?"
+            prompt = (
+                f"Pregunta al usuario '{state['name']}' qué hizo entre "
+                f"{tmap['last_hour']['start']} y {tmap['last_hour']['end']}. "
+                "No hables de tus actividades; hazle la pregunta de forma directa."
+            )
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
 
     elif stage == "ask_last_hour":
         stage = "ask_next_hour"
         prompt = (
-            f"{state['name']}, ahora cuéntame qué planeas hacer entre "
-            f"{tmap['next_hour']['start']} y {tmap['next_hour']['end']}."
+            f"Ahora pídele a {state['name']} que cuente qué planea hacer entre "
+            f"{tmap['next_hour']['start']} y {tmap['next_hour']['end']}. "
+            "No hables de tus actividades; hazle la pregunta de forma directa."
         )
         reply = ask_gpt_in_context(db, user_id, prompt, stage)
 
@@ -111,7 +132,10 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         global_state = analyzer_node(global_state)
         global_state = recommender_node(global_state)
         recs = global_state.get("recommendation", [])
-        base_prompt = "¿Necesitas alguna sugerencia extra o aclaración?"
+        base_prompt = (
+            "Responde con una despedida amable y una invitación a preguntar "
+            "si necesita sugerencias extras. No hables de tus actividades."
+        )
         base_ans = ask_gpt_in_context(db, user_id, base_prompt, stage)
         if recs:
             rec_text = "\n".join(recs)
@@ -123,7 +147,9 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         global_state = analyzer_node(global_state)
         global_state = recommender_node(global_state)
         recs = global_state.get("recommendation", [])
-        final_prompt = "¿En qué más puedo apoyarte ahora mismo?"
+        final_prompt = (
+            "Ofrece un cierre o pregunta final para ver en qué más puedes ayudar."
+        )
         final_ans = ask_gpt_in_context(db, user_id, final_prompt, stage)
         if recs:
             rec_text = "\n".join(recs)
