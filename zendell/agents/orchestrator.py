@@ -4,8 +4,6 @@ from typing import Dict, Any
 from datetime import datetime, timedelta
 from zendell.core.db import MongoDBManager
 from zendell.agents.activity_collector import activity_collector_node
-from zendell.agents.analyzer import analyzer_node
-from zendell.agents.recommender import recommender_node
 from zendell.services.llm_provider import ask_gpt_chat
 
 def missing_profile_fields(state: dict) -> list:
@@ -35,11 +33,6 @@ def get_time_ranges() -> dict:
     }
 
 def build_system_context(db: MongoDBManager, user_id: str, stage: str) -> str:
-    """
-    Aquí añadimos instrucciones claras para que GPT NO hable de sus
-    actividades ni se salga de contexto, sino que formule preguntas directas 
-    o dé respuestas útiles sobre el usuario.
-    """
     state = db.get_state(user_id)
     name = state.get("name", "Desconocido")
     st_info = state.get("short_term_info", [])
@@ -73,7 +66,7 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         "customer_name": state.get("name", "Desconocido"),
         "activities": [],
         "analysis": {},
-        "recommendation": [],
+        "clarification_questions": [],
         "last_message": last_message,
         "conversation_context": []
     }
@@ -82,81 +75,47 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
     missing = missing_profile_fields(state)
     tmap = get_time_ranges()
     reply = ""
-
     if stage == "initial":
         if missing:
             stage = "ask_profile"
             needed = ", ".join(missing)
-            prompt = (
-                f"Faltan estos datos: {needed}. Por favor, proporciónalos. "
-                "No hables de nada más."
-            )
+            prompt = f"Faltan estos datos: {needed}. Por favor, proporciónalos. No hables de nada más."
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
             stage = "ask_last_hour"
-            prompt = (
-                f"Pregunta al usuario '{state['name']}' qué hizo entre "
-                f"{tmap['last_hour']['start']} y {tmap['last_hour']['end']}. "
-                "No hables de tus actividades; hazle la pregunta de forma directa."
-            )
+            prompt = f"Pregunta al usuario '{state['name']}' qué hizo entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}. No hables de tus actividades; hazle la pregunta de forma directa."
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
-
     elif stage == "ask_profile":
         if missing:
             needed = ", ".join(missing)
-            prompt = (
-                f"Aún faltan: {needed}. Pide esos datos. "
-                "No hables de nada más."
-            )
+            prompt = f"Aún faltan: {needed}. Pide esos datos. No hables de nada más."
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
             stage = "ask_last_hour"
-            prompt = (
-                f"Pregunta al usuario '{state['name']}' qué hizo entre "
-                f"{tmap['last_hour']['start']} y {tmap['last_hour']['end']}. "
-                "No hables de tus actividades; hazle la pregunta de forma directa."
-            )
+            prompt = f"Pregunta al usuario '{state['name']}' qué hizo entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}. No hables de tus actividades; hazle la pregunta de forma directa."
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
-
     elif stage == "ask_last_hour":
         stage = "ask_next_hour"
-        prompt = (
-            f"Ahora pídele a {state['name']} que cuente qué planea hacer entre "
-            f"{tmap['next_hour']['start']} y {tmap['next_hour']['end']}. "
-            "No hables de tus actividades; hazle la pregunta de forma directa."
-        )
+        prompt = f"Ahora pídele a {state['name']} que cuente qué planea hacer entre {tmap['next_hour']['start']} y {tmap['next_hour']['end']}. No hables de tus actividades; hazle la pregunta de forma directa."
         reply = ask_gpt_in_context(db, user_id, prompt, stage)
-
     elif stage == "ask_next_hour":
+        stage = "clarify"
+        from zendell.agents.clarifier import clarifier_node
+        global_state = clarifier_node(global_state)
+        clarification_questions = global_state.get("clarification_questions", [])
+        if clarification_questions:
+            prompt = "Para afinar detalles, necesito aclarar lo siguiente: " + "; ".join(clarification_questions)
+            reply = prompt
+        else:
+            reply = "Perfecto, Daniel. Si no hay más aclaraciones, te escribiré en una hora. ¿Algo más que quieras agregar?"
+    elif stage == "clarify":
         stage = "final"
-        global_state = analyzer_node(global_state)
-        global_state = recommender_node(global_state)
-        recs = global_state.get("recommendation", [])
-        base_prompt = (
-            "Responde con una despedida amable y una invitación a preguntar "
-            "si necesita sugerencias extras. No hables de tus actividades."
-        )
-        base_ans = ask_gpt_in_context(db, user_id, base_prompt, stage)
-        if recs:
-            rec_text = "\n".join(recs)
-            reply = f"{base_ans}\n\nSugerencias:\n{rec_text}"
-        else:
-            reply = base_ans
-
+        final_prompt = "Ofrece un cierre amigable e indica que volverás a escribir en una hora, invitando a seguir conversando si lo desea."
+        reply = ask_gpt_in_context(db, user_id, final_prompt, stage)
     else:
-        global_state = analyzer_node(global_state)
-        global_state = recommender_node(global_state)
-        recs = global_state.get("recommendation", [])
-        final_prompt = (
-            "Ofrece un cierre o pregunta final para ver en qué más puedes ayudar."
-        )
-        final_ans = ask_gpt_in_context(db, user_id, final_prompt, stage)
-        if recs:
-            rec_text = "\n".join(recs)
-            reply = f"{final_ans}\n\nSugerencias:\n{rec_text}"
-        else:
-            reply = final_ans
-
+        stage = "final"
+        final_prompt = "Ofrece un cierre o pregunta final para ver en qué más puedes ayudar."
+        reply = ask_gpt_in_context(db, user_id, final_prompt, stage)
     state["conversation_stage"] = stage
     db.save_state(user_id, state)
     db.save_conversation_message(user_id, "assistant", reply, {"step": "orchestrator_flow"})
