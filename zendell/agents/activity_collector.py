@@ -1,6 +1,7 @@
 # zendell/agents/activity_collector.py
 
 import json
+import re
 from datetime import datetime
 from zendell.services.llm_provider import ask_gpt
 from zendell.core.db import MongoDBManager
@@ -13,26 +14,31 @@ def activity_collector_node(global_state: dict) -> dict:
         return global_state
     db = MongoDBManager()
     st = db.get_state(user_id)
-    # Extraer información de perfil y actualizar solo si se obtiene valor
-    extracted = extract_profile_info(last_msg)
-    print(f"[activity_collector] Perfil extraído: {extracted}")
-    if extracted.get("name"):
-        st["name"] = extracted["name"]
-    if "general_info" not in st:
-        st["general_info"] = {}
-    gi = st["general_info"]
-    if extracted.get("ocupacion"):
-        gi["ocupacion"] = extracted["ocupacion"]
-    if extracted.get("gustos"):
-        gi["gustos"] = extracted["gustos"]
-    if extracted.get("metas"):
-        gi["metas"] = extracted["metas"]
+    
+    # Actualizamos el perfil solo en las etapas iniciales.
+    if st.get("conversation_stage", "initial") in ["initial", "ask_profile"]:
+        extracted = extract_profile_info(last_msg)
+        print(f"[activity_collector] Perfil extraído: {extracted}")
+        if extracted.get("name"):
+            st["name"] = extracted["name"]
+        if "general_info" not in st:
+            st["general_info"] = {}
+        gi = st["general_info"]
+        if extracted.get("ocupacion"):
+            gi["ocupacion"] = extracted["ocupacion"]
+        if extracted.get("gustos"):
+            gi["gustos"] = extracted["gustos"]
+        if extracted.get("metas"):
+            gi["metas"] = extracted["metas"]
+    else:
+        print("[activity_collector] Omite actualizar perfil; se trata de una actividad.")
+
     if "short_term_info" not in st:
         st["short_term_info"] = []
     st["short_term_info"].append(f"[User] {last_msg}")
     
     stage = st.get("conversation_stage", "initial")
-    # Solo se generan actividades en las etapas de "ask_last_hour" y "ask_next_hour"
+    # Solo se generan actividades en etapas de actividades
     if stage not in ["ask_last_hour", "ask_next_hour"]:
         db.save_state(user_id, st)
         return global_state
@@ -43,7 +49,6 @@ def activity_collector_node(global_state: dict) -> dict:
     
     subs = extract_sub_activities(last_msg)
     print(f"[activity_collector] Sub-actividades extraídas: {subs}")
-    # Si no se obtuvieron subactividades, se crea una actividad por defecto
     if not subs:
         default_title = " ".join(last_msg.split()[:3]) if last_msg.split() else "Actividad"
         default_activity = {
@@ -66,20 +71,22 @@ def activity_collector_node(global_state: dict) -> dict:
             "original_message": last_msg,
             "clarification_questions": []
         }
-        # Generar preguntas de clarificación para la actividad
+        # Prompt de clarificación actualizado para forzar salida JSON
         prompt_clarify = (
-            f"El usuario dijo: '{last_msg}'. Se ha registrado la actividad: '{item['title']}' "
-            f"en la categoría '{item['category']}'. Dado que el mensaje puede ser ambiguo, "
-            "genera preguntas de clarificación que ayuden a indagar más en detalles de esta actividad. "
-            "Por ejemplo, si la actividad es 'Trabajé en un proyecto de python', podrías preguntar: "
-            "'¿Qué tareas específicas realizaste?', '¿Cuál fue el objetivo del proyecto?', etc. "
-            "Devuelve la lista en formato JSON con la clave 'questions'."
+            f"El usuario escribió: '{last_msg}'. Se ha registrado la actividad: '{item['title']}' "
+            f"con la categoría '{item['category']}'. "
+            "Analiza el mensaje y, si detectas que el usuario está cuestionando (por ejemplo, frases como '¿por qué me preguntas eso?', '¿para qué me preguntas eso?', etc.), "
+            "incluye una breve explicación del motivo de la pregunta. Luego, genera al menos dos preguntas de clarificación que ayuden a entender mejor la actividad. "
+            "Devuelve **únicamente** un JSON válido con el siguiente formato EXACTO:\n"
+            '{"questions": ["Pregunta 1", "Pregunta 2", ...]}\n'
+            "Si no hay preguntas que hacer, devuelve: {\"questions\": []}."
         )
         response = ask_gpt(prompt_clarify)
         try:
             data = json.loads(response)
             questions = data.get("questions", [])
-        except Exception:
+        except Exception as e:
+            print(f"[activity_collector] Error al parsear preguntas: {e}")
             questions = []
         item["clarification_questions"] = questions
         
@@ -87,11 +94,10 @@ def activity_collector_node(global_state: dict) -> dict:
         db.add_activity(user_id, item)
         print(f"[activity_collector] Actividad agregada: {item}")
     
-    # Generar razonamiento global del LLM para registro
     if new_items:
-        llm_prompt = f"El mensaje '{last_msg}' generó las siguientes actividades: {new_items}. Explica detalladamente por qué se detectaron estas actividades y qué elementos en el mensaje permitieron identificarlas."
+        llm_prompt = f"El mensaje '{last_msg}' generó las siguientes actividades: {new_items}. Explica detalladamente por qué se detectaron estas actividades y qué elementos permitieron identificarlas."
     else:
-        llm_prompt = f"El mensaje '{last_msg}' no generó actividades. Razona detalladamente por qué no se detectaron actividades y qué elementos del mensaje faltaron o no fueron interpretados como actividad."
+        llm_prompt = f"El mensaje '{last_msg}' no generó actividades. Razona detalladamente por qué no se detectaron actividades y qué elementos faltaron."
     reasoning = ask_gpt(llm_prompt)
     print(f"[activity_collector] Razonamiento del LLM: {reasoning}")
     
@@ -123,28 +129,51 @@ def activity_collector_node(global_state: dict) -> dict:
     return global_state
 
 def extract_profile_info(msg: str) -> dict:
-    prompt = f'Texto del usuario: "{msg}" Extrae en JSON: {{"name":"","ocupacion":"","gustos":"","metas":""}}'
+    prompt = (
+        "Extrae de forma detallada la siguiente información del usuario, en formato JSON con las claves "
+        '{"name", "ocupacion", "gustos", "metas"}:\n'
+        "1. name: Si el usuario se presenta, extrae su nombre o nombre completo.\n"
+        "2. ocupacion: Extrae la ocupación o profesión si se menciona.\n"
+        "3. gustos: Extrae sus gustos o aficiones, pero evita confundir actividades con gustos.\n"
+        "4. metas: Extrae cualquier objetivo o meta que mencione.\n"
+        "Si algún dato no está presente, asigna una cadena vacía.\n"
+        f"Mensaje: {msg}"
+    )
     r = ask_gpt(prompt)
     out = {"name": "", "ocupacion": "", "gustos": "", "metas": ""}
     if not r:
         return out
-    r = r.replace("`json", "").replace("`", "").strip()
     try:
-        data = json.loads(r)
+        match = re.search(r'\{.*\}', r, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            data = json.loads(json_str)
+        else:
+            data = json.loads(r)
         for k in out:
-            out[k] = data.get(k, "")
-    except:
-        pass
+            out[k] = data.get(k, "").strip()
+    except Exception as e:
+        print(f"[extract_profile_info] Error parsing JSON: {e}")
     return out
 
 def classify_activity(msg: str) -> str:
-    prompt = f'Texto: "{msg}" ¿Describe una actividad? Responde con uno de [Trabajo, Descanso, Ejercicio, Ocio, Otro, NoActivity].'
+    prompt = (
+        f"Analiza el siguiente mensaje: '{msg}'. "
+        "Determina la categoría de la actividad descrita de manera flexible basándote en el contexto y la intención. "
+        "Devuelve **únicamente** un JSON válido con la clave 'category' en el siguiente formato EXACTO:\n"
+        '{"category": "La categoría que corresponda"}\n'
+        "Si no se identifica actividad, devuelve: {\"category\": \"NoActivity\"}."
+    )
     r = ask_gpt(prompt)
     if not r:
         return "NoActivity"
-    r = r.strip()
-    valids = ["Trabajo", "Descanso", "Ejercicio", "Ocio", "Otro", "NoActivity"]
-    return r if r in valids else "NoActivity"
+    try:
+        data = json.loads(r)
+        category = data.get("category", "NoActivity")
+        return category.strip()
+    except Exception as e:
+        print(f"[classify_activity] Error: {e}")
+        return "NoActivity"
 
 def extract_sub_activities(msg: str) -> list:
     prompt = f'Texto: "{msg}" Enumera en JSON las subactividades como: {{"activities": [{{"title":"","category":"","time_context":"past"}}]}}'
