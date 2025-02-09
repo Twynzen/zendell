@@ -9,7 +9,7 @@ from zendell.services.llm_provider import ask_gpt_chat
 def missing_profile_fields(state: dict) -> list:
     fields = []
     if state.get("name", "Desconocido") in ["", "Desconocido"]:
-        fields.append("name")
+        fields.append("nombre")
     info = state.get("general_info", {})
     if not info.get("ocupacion", ""):
         fields.append("ocupacion")
@@ -41,7 +41,6 @@ def build_system_context(db: MongoDBManager, user_id: str, stage: str) -> str:
         f"El usuario se llama {name}. Últimas notas: {last_notes}. Etapa actual: {stage}. "
         "Tu objetivo es ayudarle y preguntarle sobre sus actividades. "
         "No hables en primera persona de tus propias acciones, no inventes datos sobre ti. "
-        "En lugar de decir 'estuve disponible', pregúntale directamente a él/ella sobre su última hora o próxima hora. "
         "Sé breve y conciso, y mantén coherencia con lo que el usuario te dijo."
     )
     return context
@@ -77,9 +76,10 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
     reply = ""
     if stage == "initial":
         if missing:
-            stage = "ask_profile"
             needed = ", ".join(missing)
-            prompt = f"Faltan estos datos: {needed}. Por favor, proporciónalos. No hables de nada más."
+            nombre = state.get("name", "amigo")
+            prompt = f"Hola {nombre}, para conocerte mejor necesito saber: {needed}. Por favor, proporciona estos datos de forma clara y completa."
+            stage = "ask_profile"
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
             stage = "ask_last_hour"
@@ -88,7 +88,7 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
     elif stage == "ask_profile":
         if missing:
             needed = ", ".join(missing)
-            prompt = f"Aún faltan: {needed}. Pide esos datos. No hables de nada más."
+            prompt = f"Aún faltan estos datos: {needed}. Por favor, proporciónalos de forma clara y sin agregar información extra."
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
             stage = "ask_last_hour"
@@ -105,12 +105,13 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         clarification_questions = global_state.get("clarification_questions", [])
         if clarification_questions:
             prompt = "Para afinar detalles, necesito aclarar lo siguiente: " + "; ".join(clarification_questions)
-            reply = prompt
+            reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
-            reply = "Perfecto, Daniel. Si no hay más aclaraciones, te escribiré en una hora. ¿Algo más que quieras agregar?"
+            final_prompt = "Ofrece un cierre amigable e invita al usuario a seguir conversando si lo desea. Sé creativo y evita mensajes predefinidos."
+            reply = ask_gpt_in_context(db, user_id, final_prompt, stage)
     elif stage == "clarify":
         stage = "final"
-        final_prompt = "Ofrece un cierre amigable e indica que volverás a escribir en una hora, invitando a seguir conversando si lo desea."
+        final_prompt = "Ofrece un cierre o pregunta final para ver en qué más puedes ayudar."
         reply = ask_gpt_in_context(db, user_id, final_prompt, stage)
     else:
         stage = "final"
