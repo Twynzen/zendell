@@ -1,10 +1,9 @@
 # zendell/agents/orchestrator.py
-
 from typing import Dict, Any
 from datetime import datetime, timedelta
 from zendell.core.db import MongoDBManager
 from zendell.agents.activity_collector import activity_collector_node
-from zendell.services.llm_provider import ask_gpt_chat
+from zendell.services.llm_provider import ask_gpt_chat, ask_gpt
 
 def missing_profile_fields(state: dict) -> list:
     fields = []
@@ -95,6 +94,21 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
             prompt = f"Pregunta al usuario '{state['name']}' qué hizo entre {tmap['last_hour']['start']} y {tmap['last_hour']['end']}. No hables de tus actividades; hazle la pregunta de forma directa."
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
     elif stage == "ask_last_hour":
+        # Uso del LLM para analizar semánticamente si el usuario cuestiona el motivo de la pregunta
+        meta_check_prompt = (
+            f"Analiza el siguiente mensaje del usuario: '{last_message}'. "
+            "¿El usuario está cuestionando el motivo de la pregunta que se le hizo anteriormente? "
+            "Responde únicamente con 'Sí' o 'No'."
+        )
+        meta_check_response = ask_gpt(meta_check_prompt)
+        if meta_check_response.strip().lower() == "sí":
+            friendly_prompt = (
+                "Genera una respuesta amistosa y empática que explique brevemente que la razón de la pregunta es "
+                "conocer mejor sus experiencias para poder ayudarle de forma personalizada, tal como lo haría un buen amigo. "
+                "Responde de forma natural y cercana."
+            )
+            friendly_response = ask_gpt(friendly_prompt)
+            db.save_conversation_message(user_id, "assistant", friendly_response, {"step": "orchestrator_flow_extra"})
         stage = "ask_next_hour"
         prompt = f"Ahora pídele a {state['name']} que cuente qué planea hacer entre {tmap['next_hour']['start']} y {tmap['next_hour']['end']}. No hables de tus actividades; hazle la pregunta de forma directa."
         reply = ask_gpt_in_context(db, user_id, prompt, stage)

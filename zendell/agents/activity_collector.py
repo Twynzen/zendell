@@ -86,17 +86,19 @@ def activity_collector_node(global_state: dict) -> dict:
             "Si no hay preguntas, devuelve: {\"questions\": []}."
         )
         response = ask_gpt(prompt_clarify)
+    try:
+        data = json.loads(response)
+        questions = data.get("questions", [])
+    except Exception as e:
+        print(f"[activity_collector] Error al parsear preguntas: {e}")
+        fallback_prompt = f"Genera en formato JSON una lista de preguntas de clarificación para el siguiente mensaje: '{last_msg}'. Usa el formato {{'questions': ['Pregunta 1', 'Pregunta 2', ...]}}."
+        fallback_response = ask_gpt(fallback_prompt)
         try:
-            data = json.loads(response)
-            questions = data.get("questions", [])
-        except Exception as e:
-            print(f"[activity_collector] Error al parsear preguntas: {e}")
-            if "Alejandra" in last_msg:
-                questions = ["¿Quién es Alejandra para ti?"]
-            elif "Age of Mythology" in last_msg or "age of mitology" in last_msg.lower():
-                questions = ["¿Qué significa Age of Mythology para ti?"]
-            else:
-                questions = ["¿Podrías darme más detalles sobre la actividad?"]
+            data_fallback = json.loads(fallback_response)
+            questions = data_fallback.get("questions", [])
+        except Exception as e2:
+            print(f"[activity_collector] Fallback error: {e2}")
+            questions = ["¿Podrías darme más detalles sobre la actividad?"]
         item["clarification_questions"] = questions
         new_items.append(item)
         db.add_activity(user_id, item)
