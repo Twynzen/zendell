@@ -42,7 +42,8 @@ def activity_collector_node(global_state: dict) -> dict:
             "time_context": tc,
             "timestamp": datetime.utcnow().isoformat(),
             "original_message": last_msg,
-            "clarification_questions": []
+            "clarification_questions": [],
+            "clarifier_responses": []
         }
         subs = [default_activity]
     new_items = []
@@ -53,7 +54,8 @@ def activity_collector_node(global_state: dict) -> dict:
             "time_context": sub.get("time_context", tc),
             "timestamp": datetime.utcnow().isoformat(),
             "original_message": last_msg,
-            "clarification_questions": []
+            "clarification_questions": [],
+            "clarifier_responses": []
         }
         prompt_clarify = (
             f"Analiza el mensaje: '{last_msg}'. Considera la actividad descrita como '{item['title']}' y utiliza los detalles del contexto para generar una pregunta de clarificación específica y razonada. "
