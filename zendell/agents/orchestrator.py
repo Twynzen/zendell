@@ -101,11 +101,9 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         if clarification_questions:
             prompt = "Para afinar detalles, necesito aclarar lo siguiente: " + "; ".join(clarification_questions)
             reply = ask_gpt_in_context(db, user_id, prompt, "clarifier_pending")
-            stage = "clarifier_pending"
         else:
             prompt = "No se generaron preguntas de clarificación relevantes. ¿Hay algo más que quieras aclarar?"
             reply = ask_gpt_in_context(db, user_id, prompt, "clarifier_pending")
-            stage = "clarifier_pending"
     elif stage == "clarifier_pending":
         from zendell.agents.clarifier import process_clarifier_response
         global_state = process_clarifier_response(global_state)
