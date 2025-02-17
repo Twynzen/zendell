@@ -104,6 +104,6 @@ Dependiendo de tus respuestas, el analizador deduce tu estado de ánimo o hábit
    ```bash
    python main.py
    ```
-
+En proceso de mejora
 
 https://www.mermaidchart.com/raw/e3f8fb68-0d1e-4097-bc9c-4302d118bfe8?theme=light&version=v0.1&format=svg
