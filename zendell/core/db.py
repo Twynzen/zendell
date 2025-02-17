@@ -67,8 +67,11 @@ class MongoDBManager:
     def add_activity(self, user_id: str, activity_data: Dict[str, Any]):
         activity_data["user_id"] = user_id
         activity_data["timestamp"] = datetime.utcnow().isoformat()
-        activity_data["activity_id"] = str(ObjectId())
+        if "activity_id" not in activity_data:
+            activity_data["activity_id"] = str(ObjectId())
         self.activities_coll.insert_one(activity_data)
+
+
 
     def save_conversation_message(self, user_id: str, role: str, content: str,
                                   extra_data: Optional[Dict[str, Any]] = None) -> None:
@@ -86,3 +89,4 @@ class MongoDBManager:
     def get_user_conversation(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         cursor = self.conversations_coll.find({"user_id": user_id}).sort("timestamp", -1).limit(limit)
         return list(cursor)[::-1]
+    

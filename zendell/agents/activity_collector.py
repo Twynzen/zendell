@@ -57,6 +57,7 @@ def activity_collector_node(global_state: dict) -> dict:
             "clarification_questions": [],
             "clarifier_responses": []
         }
+        item["activity_id"] = str(ObjectId())  # Generamos y asignamos el ID
         prompt_clarify = (
             f"Analiza el mensaje: '{last_msg}'. Considera la actividad descrita como '{item['title']}' y utiliza los detalles del contexto para generar una pregunta de clarificación específica y razonada. "
             "La pregunta debe invitar al usuario a profundizar en aspectos relevantes de esa actividad sin ser genérica. Devuelve únicamente un JSON válido EXACTAMENTE en el siguiente formato (sin texto adicional): "
