@@ -37,7 +37,14 @@ def build_system_context(db: MongoDBManager, user_id: str, stage: str) -> str:
     name = state.get("name", "Desconocido")
     st_info = state.get("short_term_info", [])
     last_notes = ". ".join(st_info[-3:]) if st_info else ""
-    context = f"El usuario se llama {name}. Últimas notas: {last_notes}. Etapa actual: {stage}. Tu objetivo es recopilar información sobre sus actividades sin ofrecer ayuda."
+    context = (
+        f"ETAPA: {stage}. Usuario: {name}. Últimas notas: {last_notes}. "
+        "Instrucciones: En 'ask_last_hour', pregunta '¿Qué hiciste entre [hora inicio] y [hora fin]?' "
+        "En 'clarifier_last_hour', profundiza en detalles (ej. qué, cuándo, dónde, cómo, con quién, por qué) de las actividades pasadas. "
+        "En 'ask_next_hour', pregunta '¿Qué planeas hacer entre [hora inicio] y [hora fin]?' "
+        "En 'clarifier_next_hour', profundiza en detalles de actividades futuras. "
+        "Objetivo: recopilar datos sin ofrecer ayuda ni sugerencias adicionales."
+    )
     return context
 
 def ask_gpt_in_context(db: MongoDBManager, user_id: str, user_prompt: str, stage: str) -> str:
@@ -51,7 +58,7 @@ def ask_gpt_in_context(db: MongoDBManager, user_id: str, user_prompt: str, stage
     response = ask_gpt_chat(chat, model="gpt-3.5-turbo", temperature=0.7)
     return response if response else "¿Podrías repetirme lo que necesitas?"
 
-def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
+def orchestrator_flow(user_id: str, last_message: str, global_state_override: dict = None) -> Dict[str, Any]:
     db = MongoDBManager()
     state = db.get_state(user_id)
     stage = state.get("conversation_stage", "initial")
@@ -65,6 +72,15 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         "last_message": last_message,
         "conversation_context": []
     }
+    if global_state_override:
+        for key, value in global_state_override.items():
+            global_state[key] = value
+        # Forzar la etapa clarifier si se recibe clarifier_answer
+        if "clarifier_answer" in global_state_override:
+            if global_state_override.get("current_period") == "future":
+                stage = "clarifier_next_hour"
+            else:
+                stage = "clarifier_last_hour"
     global_state = activity_collector_node(global_state)
     state = db.get_state(user_id)
     missing = missing_profile_fields(state)
@@ -73,8 +89,7 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
     if stage == "initial":
         if missing:
             needed = ", ".join(missing)
-            nombre = state.get("name", "amigo")
-            prompt = f"Hola {nombre}, para conocerte mejor necesito saber: {needed}. Proporciónalos de forma clara."
+            prompt = f"Hola {state.get('name','amigo')}, para conocerte mejor necesito saber: {needed}. Proporciónalos de forma clara."
             stage = "ask_profile"
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
         else:
@@ -92,11 +107,12 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
             reply = ask_gpt_in_context(db, user_id, prompt, stage)
     elif stage == "ask_last_hour":
         stage = "clarifier_last_hour"
+        global_state["current_period"] = "past"
         from zendell.agents.clarifier import clarifier_node
         global_state = clarifier_node(global_state)
-        clarification_questions = global_state.get("clarification_questions", [])
-        if clarification_questions:
-            prompt = "Para afinar detalles del período pasado, " + "; ".join(clarification_questions)
+        questions = global_state.get("clarification_questions", [])
+        if questions:
+            prompt = "Para afinar detalles del período pasado, " + "; ".join(questions)
             reply = ask_gpt_in_context(db, user_id, prompt, "clarifier_last_hour")
         else:
             reply = "No se generaron preguntas de clarificación para el período pasado."
@@ -108,11 +124,12 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         reply = ask_gpt_in_context(db, user_id, prompt, stage)
     elif stage == "ask_next_hour":
         stage = "clarifier_next_hour"
+        global_state["current_period"] = "future"
         from zendell.agents.clarifier import clarifier_node
         global_state = clarifier_node(global_state)
-        clarification_questions = global_state.get("clarification_questions", [])
-        if clarification_questions:
-            prompt = "Para afinar detalles del período futuro, " + "; ".join(clarification_questions)
+        questions = global_state.get("clarification_questions", [])
+        if questions:
+            prompt = "Para afinar detalles del período futuro, " + "; ".join(questions)
             reply = ask_gpt_in_context(db, user_id, prompt, "clarifier_next_hour")
         else:
             reply = "No se generaron preguntas de clarificación para el período futuro."
@@ -120,12 +137,13 @@ def orchestrator_flow(user_id: str, last_message: str) -> Dict[str, Any]:
         from zendell.agents.clarifier import process_clarifier_response
         global_state = process_clarifier_response(global_state)
         stage = "final"
-        reply = "La información se ha registrado."
+        prompt = "Genera un mensaje de cierre que confirme que toda la información ha sido registrada correctamente y que invite a continuar la conversación en el futuro si el usuario lo desea."
+        reply = ask_gpt_in_context(db, user_id, prompt, stage)
     elif stage == "final":
-        reply = "La información se ha registrado."
+        reply = ask_gpt_in_context(db, user_id, "Genera un mensaje de cierre que confirme la recolección exitosa de la información.", "final")
     else:
         stage = "final"
-        reply = "La información se ha registrado."
+        reply = ask_gpt_in_context(db, user_id, "Genera un mensaje de cierre que confirme la recolección exitosa de la información.", "final")
     state["conversation_stage"] = stage
     db.save_state(user_id, state)
     db.save_conversation_message(user_id, "assistant", reply, {"step": "orchestrator_flow"})
