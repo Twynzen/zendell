@@ -1,23 +1,22 @@
-# ZENDELL: Ecosistema Multiagente Proactivo
+CONTEXTO DEL PROYECTO ACTUAL: # ZENDELL: Ecosistema Multiagente Proactivo
 
 > **Asistente “super inteligente” que te acompaña durante el día, iniciando conversaciones, recopilando información y adaptándose a tus necesidades.**  
 
-## 1. ¿Qué es ZENDELL?
+## 1. ZENDELL es un conjunto de agentes inteligentes que trabajan en equipo para:
 
-ZENDELL es un conjunto de agentes inteligentes que trabajan en equipo para:
-1. **Conocer tus necesidades** y objetivos.
-2. **Anticipar** recordatorios y sugerencias.
+1. **Conocer actividades hora a hora del usuario.
+2. **Analizar información del usuario para comprenderlo y entenderlo tanto fisica como mentalmente.
 3. **Interactuar proactivamente** cada hora (o en intervalos configurables).
-4. **Evolucionar** contigo, guardando un perfil en una base de datos (MongoDB) y expandiendo sus funcionalidades a otros canales (Discord, WhatsApp, correo, etc.).
+4. **Evolucionar, guardando un perfil en una base de datos (MongoDB) y utilizando por el momento (Discord, WhatsApp, correo, ) para comunicarse con el usuario.
 
-El objetivo final es que ZENDELL sea como un “mejor amigo virtual”, siempre al tanto de lo que necesitas y dispuesto a ayudarte (sacando tu información, analizándola y recomendando acciones).
+El objetivo final es que ZENDELL sea como un “mejor amigo/ maestro y guia”, siempre al tanto de lo que necesita (sacando información, analizándola y eventualemnte al tener una amplia cantidad de datos aportar al usuario con sus necesidades, recordatorios, consejos, apoyo y prioridade).
 
 ## 2. Características Clave
 
-- **Conversaciones Proactivas**: No espera a que el usuario hable; cada hora (o cuando lo configures) inicia un diálogo.
-- **Agentes Especializados**: Cada módulo (collector, analyzer, recommender, communicator, etc.) se encarga de una tarea concreta.
-- **Memoria y Aprendizaje**: Gracias a la base de datos y la orquestación, ZENDELL va recordando y aprendiendo sobre el usuario.
-- **Integración con GPT**: Para generar textos, extraer información del usuario y crear recomendaciones personalizadas.
+- **Conversaciones Proactivas**: No espera a que el usuario hable; cada hora (o cuando se configures) inicia un diálogo/conversación.
+- **Agentes Especializados**: Cada módulo (collector, analyzer, recommender, communicator, etc.) se encarga de una tarea concreta, (Esto debe ser ampliable con el fin de que si a futuro salen nuevas tecnologias o agentes de IA pueda embeberlos como un agente más al sistema, ejemplo: Un agente que busca noticias relevantes en internet y le avisa de una inversión especifica sobre x acción de empresa).
+- **Memoria y Aprendizaje**: Gracias a la base de datos y la orquestación, ZENDELL va recordando las conversaciones, aprendiendo sobre el usuario y razonando sobre sus necesidades.
+- **Integración con LLMs**: Para generar textos, extraer información del usuario y crear recomendaciones personalizadas.
 - **Escalabilidad**: Arquitectura modular que permite añadir fácilmente nuevos agentes o servicios de mensajería.
 
 ## 3. Arquitectura del Proyecto
@@ -87,23 +86,6 @@ Dependiendo de tus respuestas, el analizador deduce tu estado de ánimo o hábit
 
 - **Integración con WhatsApp y Email**: Ya en proceso para llegar a más canales.  
 - **Agente Bibliotecario**: Para manejar el contexto y el historial en mayor detalle.  
-- **Optimización y Nuevos Nodos**: Añadir más agentes especializados (por ejemplo, agente de hábitos saludables, agente de gestión financiera).  
-
-## 7. Requisitos e Instalación
-
-1. **Clona este repo**  
-   ```bash
-   git clone https://github.com/tu-usuario/zendell.git
-   ```
-2. **Instala dependencias** (vía `pip`, `conda` o `poetry` según tu archivo preferido)  
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Configura las credenciales** (en `zendell/config/settings.py` o variables de entorno).  
-4. **Arranca la app**  
-   ```bash
-   python main.py
-   ```
-En proceso de mejora
-
+- **Optimización y Nuevos Nodos**: Añadir más agentes especializados (por ejemplo, agente de hábitos saludables, agente de gestión financiera).
+- 
 https://www.mermaidchart.com/raw/e3f8fb68-0d1e-4097-bc9c-4302d118bfe8?theme=light&version=v0.1&format=svg
