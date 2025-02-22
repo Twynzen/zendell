@@ -302,6 +302,85 @@ Zendell APP — 11:05
 Gracias, Elena. Toda la información ha sido registrada. ¡Quedo a tu disposición para cualquier consulta futura!
 (ETAPA: Final. Razonamiento: Cierre del flujo con confirmación de la recolección completa de datos.)
 
+
+## Ejemplos flujo NO feliz: 
+ Cada ejemplo incluye el escenario problemático, el razonamiento interno del sistema, la predicción del fallo y la respuesta de redirección que permite reorientar al usuario y recabar los datos necesarios. Vamos a verlo:
+
+Ejemplo 1: Usuario Evasivo en el Registro de Perfil
+Zendell APP — 08:00
+¡Hola! Soy Zendell, un sistema multiagente diseñado para asistirte. Para conocerte mejor, necesito saber: ¿cuál es tu nombre, ocupación, gustos y metas? (ETAPA: ask_profile. Razonamiento: Solicitar datos esenciales para personalizar la experiencia.)
+
+Usuario (Sofía) — 08:01
+No quiero compartir esos datos, es muy personal.
+(Escenario Fallido: Respuesta evasiva. Predicción: El usuario evita dar información clave.)
+
+Zendell APP — 08:02
+Entiendo tu preocupación, Sofía. Es importante contar con estos datos para poder ofrecerte recomendaciones y recordatorios personalizados que realmente te ayuden. Puedes compartir simplemente tu nombre y a qué te dedicas, y más adelante podemos profundizar en gustos y metas cuando te sientas cómoda. ¿Qué opinas? (ETAPA: Redirección en ask_profile. Razonamiento: Explicar el uso de la información y ofrecer compartir datos parciales para iniciar el proceso.)
+
+Sofía — 08:03
+Bueno, me llamo Sofía y trabajo en atención al cliente.
+(Resultado: Se recogen datos básicos y se reorienta al usuario hacia el flujo correcto.)
+
+Ejemplo 2: Usuario Responde de Forma Vaga y Poco Detallada
+Zendell APP — 12:00
+¡Hola! Soy Zendell. ¿Qué hiciste entre las 11:00 y las 12:00? (ETAPA: ask_last_hour. Razonamiento: Recopilar datos de la actividad reciente.)
+
+Usuario (Roberto) — 12:01
+Ah, nada en particular.
+(Escenario Fallido: Respuesta vaga. Predicción: No se obtiene información valiosa para análisis.)
+
+Zendell APP — 12:02
+Roberto, para entender mejor tu día y poder ayudarte de manera efectiva, me gustaría que me cuentes al menos una actividad específica o alguna tarea que realizaste, por mínima que sea. ¿Podrías darme algún detalle, aunque sea breve? (ETAPA: Clarifier_last_hour. Razonamiento: Incentivar una respuesta más detallada explicando la importancia de la información.)
+
+Roberto — 12:03
+Bueno, estuve revisando algunos correos y haciendo unas llamadas.
+(Resultado: Se logra pasar de una respuesta vaga a una más informativa, permitiendo continuar el flujo.)
+
+Ejemplo 3: Usuario Envía Respuestas Confusas o Fuera de Contexto
+Zendell APP — 16:00
+¡Hola! Soy Zendell. ¿Cuál es tu nombre y a qué te dedicas? (ETAPA: ask_profile. Razonamiento: Solicitar datos esenciales para el perfil.)
+
+Usuario (Diego) — 16:01
+¿Por qué tienen que saber eso? Además, la vida es como un sueño, ¿no crees?
+(Escenario Fallido: Respuesta confusa y fuera de contexto. Predicción: El usuario se desvía del objetivo y genera ambigüedad.)
+
+Zendell APP — 16:02
+Diego, entiendo que pueda parecer invasivo, pero estos datos nos ayudan a ofrecerte un servicio personalizado y adaptado a tus necesidades. Solo necesito saber tu nombre y en qué área trabajas para empezar. ¿Podrías compartir esa información? (ETAPA: Redirección en ask_profile. Razonamiento: Reencauzar la conversación explicando la finalidad y simplificando la solicitud.)
+
+Diego — 16:03
+Está bien, me llamo Diego y soy diseñador de experiencia de usuario.
+(Resultado: Se redirige la conversación y se obtienen los datos básicos para continuar el flujo.)
+
+Ejemplo 4: Usuario Ignora la Pregunta Sobre la Actividad Pasada
+Zendell APP — 10:00
+¡Hola! Soy Zendell. ¿Qué hiciste entre las 09:00 y las 10:00? (ETAPA: ask_last_hour. Razonamiento: Recopilar información sobre la actividad reciente.)
+
+Usuario (Martina) — 10:01
+Mmm...
+(Escenario Fallido: No respuesta o respuesta muy corta. Predicción: Falta de información sobre la actividad pasada.)
+
+Zendell APP — 10:02
+Martina, para poder ayudarte mejor y registrar tus actividades, necesito al menos un detalle de lo que hiciste en la última hora. ¿Podrías indicarme alguna actividad, por mínima que sea? (ETAPA: Clarifier_last_hour. Razonamiento: Incentivar la participación ofreciendo una solicitud concreta y explicando su utilidad.)
+
+Martina — 10:03
+Ok, estuve leyendo algunos artículos de tecnología.
+(Resultado: Se consigue una respuesta que permite continuar el flujo de análisis.)
+
+Ejemplo 5: Usuario Responde Incompletamente en la Planificación Futura
+Zendell APP — 14:00
+¡Hola! Soy Zendell. ¿Qué planeas hacer entre las 14:00 y las 15:00? (ETAPA: ask_next_hour. Razonamiento: Recoger información sobre la actividad futura para planificar el seguimiento.)
+
+Usuario (Jorge) — 14:01
+No sé...
+(Escenario Fallido: Respuesta incompleta o indecisa. Predicción: No se obtiene información sobre la planificación futura.)
+
+Zendell APP — 14:02
+Jorge, contar con tus planes, aunque sean pequeños, me ayuda a orientarte mejor y ofrecerte recordatorios o sugerencias útiles. ¿Podrías decirme al menos si tienes alguna tarea pendiente o algo que planeas revisar? (ETAPA: Clarifier_next_hour. Razonamiento: Reorientar al usuario enfatizando el beneficio de la información para su propio progreso.)
+
+Jorge — 14:03
+Creo que voy a revisar unos correos y planificar el resto del día.
+(Resultado: Se transforma la respuesta indecisa en un compromiso de acción concreta, permitiendo seguir con el flujo.)
+
 ## 6. Roadmap / Próximos Pasos
 - **Testeo y analisis de dato de multiples conversaciones a lo largo de varios días
 - ** Definir momento de conocimiento alto sobre el usuario para aportar ya con recomendacione y consejos personalizados de alto nivel de eficiencia
