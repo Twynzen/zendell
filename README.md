@@ -389,3 +389,5 @@ Creo que voy a revisar unos correos y planificar el resto del día.
 - **Optimización y Nuevos Nodos**: Añadir más agentes especializados (por ejemplo, agente de hábitos saludables, agente de gestión financiera).
 - 
 https://www.mermaidchart.com/raw/e3f8fb68-0d1e-4097-bc9c-4302d118bfe8?theme=light&version=v0.1&format=svg
+
+¿Deberia reahacer toda la arquitectura?
