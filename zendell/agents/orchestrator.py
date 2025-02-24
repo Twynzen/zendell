@@ -146,5 +146,5 @@ def orchestrator_flow(user_id: str, last_message: str, global_state_override: di
         reply = ask_gpt_in_context(db, user_id, "Genera un mensaje de cierre que confirme la recolección exitosa de la información.", "final")
     state["conversation_stage"] = stage
     db.save_state(user_id, state)
-    db.save_conversation_message(user_id, "assistant", reply, {"step": "orchestrator_flow"})
+  # db.save_conversation_message(user_id, "assistant", reply, {"step": stage})
     return {"global_state": global_state, "final_text": reply}

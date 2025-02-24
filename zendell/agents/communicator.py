@@ -13,8 +13,8 @@ class Communicator:
 
     async def on_user_message(self, text: str, author_id: str):
         self.db_manager.save_conversation_message(
-            user_id=author_id, role="user", content=text
-        )
+            user_id=author_id, role="user", content=text, extra_data={"step": "user_input"}
+        )      
         buffer = self.conversations.get(author_id, [])
         buffer.append(text)
         self.conversations[author_id] = buffer

@@ -6,6 +6,8 @@ from zendell.services.llm_provider import ask_gpt
 from zendell.core.db import MongoDBManager
 
 def clarifier_node(global_state: dict) -> dict:
+    db = MongoDBManager()
+    user_id = global_state.get("user_id", "")
     last_msg = global_state.get("last_message", "")
     activities = global_state.get("activities", [])
     if not last_msg or not activities:
@@ -37,6 +39,12 @@ def clarifier_node(global_state: dict) -> dict:
         questions = ["¿Podrías dar más detalles sobre lo que sucedió?"]
 
     global_state["clarification_questions"] = questions
+    
+    if questions:
+        db.save_conversation_message(user_id, "assistant", "; ".join(questions), {"step": "clarifier_questions"})
+    else:
+        db.save_conversation_message(user_id, "system", "No se generaron preguntas de clarificación.", {"step": "clarifier_no_questions"})
+            
     final_prompt = "¿Hay algo más que quieras aclarar sobre estas actividades?"
     global_state["clarification_final_prompt"] = final_prompt
 
@@ -98,6 +106,9 @@ def process_clarifier_response(global_state: dict) -> dict:
             db.activities_coll.update_one(
                 {"activity_id": activity_id},
                 {"$push": {"clarifier_responses": structured_data}}
+            )
+            db.save_conversation_message(
+                user_id, "system", f"Respuesta procesada para clarificación: {structured_data['answer']}", {"step": "clarifier_response"}
             )
 
     state = db.get_state(user_id)

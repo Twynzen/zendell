@@ -86,6 +86,9 @@ def activity_collector_node(global_state: dict) -> dict:
         item["clarification_questions"] = questions
         new_items.append(item)
         db.add_activity(user_id, item)
+        db.save_conversation_message(
+            user_id, "system", f"Actividad detectada: {item['title']}", {"step": "activity_collector"}
+        )
     llm_prompt = (f"El mensaje '{last_msg}' generó las siguientes actividades: {new_items}. Explica por qué se detectaron estas actividades y qué elementos permitieron identificarlas." if new_items else f"El mensaje '{last_msg}' no generó actividades. Razona por qué no se detectaron actividades y qué elementos faltaron.")
     reasoning = ask_gpt(llm_prompt)
     st.setdefault("interaction_history", []).append({
