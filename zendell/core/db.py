@@ -27,11 +27,7 @@ class MongoDBManager:
                 "daily_interaction_count": 0,
                 "last_interaction_date": "",
                 "short_term_info": [],
-                "general_info": {
-                    "metas": "",
-                    "gustos": "",
-                    "ocupacion": ""
-                },
+                "general_info": {"metas": "", "gustos": "", "ocupacion": ""},
                 "conversation_stage": "initial",
                 "interaction_history": []
             }
@@ -73,12 +69,7 @@ class MongoDBManager:
     def save_conversation_message(self, user_id: str, role: str, content: str,
                                   extra_data: Optional[Dict[str, Any]] = None) -> None:
         timestamp_str = datetime.utcnow().isoformat()
-        message_doc = {
-            "user_id": user_id,
-            "role": role,
-            "content": content,
-            "timestamp": timestamp_str
-        }
+        message_doc = {"user_id": user_id, "role": role, "content": content, "timestamp": timestamp_str}
         if extra_data:
             message_doc.update(extra_data)
         self.conversations_coll.insert_one(message_doc)

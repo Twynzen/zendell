@@ -4,14 +4,13 @@ import json
 import re
 from datetime import datetime
 from zendell.services.llm_provider import ask_gpt
-from zendell.core.db import MongoDBManager
 
 def activity_collector_node(global_state: dict) -> dict:
     user_id = global_state.get("user_id", "")
     last_msg = global_state.get("last_message", "")
+    db = global_state["db"]
     if not last_msg:
         return global_state
-    db = MongoDBManager()
     st = db.get_state(user_id)
     if st.get("conversation_stage", "initial") in ["initial", "ask_profile"]:
         extracted = extract_profile_info(last_msg)
@@ -86,10 +85,9 @@ def activity_collector_node(global_state: dict) -> dict:
         item["clarification_questions"] = questions
         new_items.append(item)
         db.add_activity(user_id, item)
-        db.save_conversation_message(
-            user_id, "system", f"Actividad detectada: {item['title']}", {"step": "activity_collector"}
-        )
-    llm_prompt = (f"El mensaje '{last_msg}' generó las siguientes actividades: {new_items}. Explica por qué se detectaron estas actividades y qué elementos permitieron identificarlas." if new_items else f"El mensaje '{last_msg}' no generó actividades. Razona por qué no se detectaron actividades y qué elementos faltaron.")
+        db.save_conversation_message(user_id, "system", f"Actividad detectada: {item['title']}", {"step": "activity_collector"})
+    llm_prompt = (f"El mensaje '{last_msg}' generó las siguientes actividades: {new_items}. Explica por qué se detectaron estas actividades y qué elementos permitieron identificarlas." 
+                  if new_items else f"El mensaje '{last_msg}' no generó actividades. Razona por qué no se detectaron actividades y qué elementos faltaron.")
     reasoning = ask_gpt(llm_prompt)
     st.setdefault("interaction_history", []).append({
         "timestamp": datetime.utcnow().isoformat(),
@@ -99,15 +97,16 @@ def activity_collector_node(global_state: dict) -> dict:
     if stage == "ask_last_hour":
         st.setdefault("activities_last_hour", []).append({
             "timestamp": datetime.utcnow().isoformat(),
-            "activities": new_items,
-            "llm_reasoning": reasoning
+            "activity_ids": [act["activity_id"] for act in new_items],
+            "reasoning": reasoning[:100]  # Un pequeño recorte
         })
     elif stage == "ask_next_hour":
         st.setdefault("activities_next_hour", []).append({
             "timestamp": datetime.utcnow().isoformat(),
-            "activities": new_items,
-            "llm_reasoning": reasoning
+            "activity_ids": [act["activity_id"] for act in new_items],
+            "reasoning": reasoning[:100]
         })
+
     db.save_state(user_id, st)
     global_state["activities"].extend(new_items)
     return global_state
@@ -127,6 +126,7 @@ def extract_profile_info(msg: str) -> dict:
     if not r:
         return out
     try:
+        import re
         match = re.search(r'\{.*\}', r, re.DOTALL)
         if match:
             json_str = match.group(0)
@@ -167,7 +167,7 @@ def extract_sub_activities(msg: str) -> list:
     r = ask_gpt(prompt)
     if not r:
         return []
-    r = r.replace("`json", "").replace("`", "").strip()
+    r = r.replace("json", "").strip()
     try:
         data = json.loads(r)
         return data.get("activities", [])
