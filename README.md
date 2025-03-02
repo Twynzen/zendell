@@ -66,7 +66,8 @@ Adicionalmente, hay archivos de configuración (`docker-compose.yml`, `pyproject
 - **Orchestrator** llama a:  
   1. **Activity Collector** → almacena nueva info.  
   2. **Analyzer** → analiza estado de ánimo y patrones.  
-  3. **Recommender** → genera consejos o próximos pasos.  
+
+
 
 ### **5. Persistencia**  
 - Todo se guarda en MongoDB: desde datos de usuario hasta logs de conversación, permitiendo rastrear el historial y mejorar la experiencia.  
