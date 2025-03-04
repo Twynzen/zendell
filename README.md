@@ -45,7 +45,6 @@ El proyecto se organiza en varias carpetas clave dentro de `zendell/`:
 - `llm_provider.py`: Interfaz para llamar a OpenAI GPT.  
 - `messaging_service.py`: Pensado para integrar otros canales (WhatsApp, email, etc.).  
 
-
 Adicionalmente, hay archivos de configuración (`docker-compose.yml`, `pyproject.toml`, `requirements.txt`, etc.) para desplegar o instalar dependencias.
 
 ## 4. Flujo de Ejecución
