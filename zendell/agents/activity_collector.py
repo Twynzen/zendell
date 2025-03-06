@@ -20,129 +20,153 @@ def activity_collector_node(global_state: dict) -> dict:
     last_msg = global_state.get("last_message", "")
     db = global_state["db"]
     
+    print(f"[COLLECTOR] Procesando mensaje de usuario: '{last_msg[:50]}...'")
+    
     if not last_msg:
+        print("[COLLECTOR] Mensaje vacío, no hay nada que procesar")
         return global_state
     
-    # Obtener el estado actual del usuario
-    st = db.get_state(user_id)
-    
-    # Si estamos en etapas iniciales, extraer información para el perfil
-    if st.get("conversation_stage", "initial") in ["initial", "ask_profile"]:
-        # Extraer y actualizar la información del perfil
-        extracted_info = db.extract_and_update_user_info(user_id, last_msg)
+    try:
+        # Obtener el estado actual del usuario como diccionario
+        st = db.get_state(user_id)
+        print(f"[COLLECTOR] Estado del usuario cargado: {st.keys()}")
         
-        # Registrar el mensaje del usuario en el contexto a corto plazo
+        # Si estamos en etapas iniciales, extraer información para el perfil
+        current_stage = st.get("conversation_stage", "initial")
+        if current_stage in ["initial", "ask_profile"]:
+            print(f"[COLLECTOR] Etapa {current_stage}: extrayendo información de perfil")
+            
+            # Extraer y actualizar la información del perfil
+            extracted_info = db.extract_and_update_user_info(user_id, last_msg)
+            
+            # Registrar el mensaje del usuario en el contexto a corto plazo
+            db.add_to_short_term_info(user_id, f"[User] {last_msg}")
+            
+            # En estas etapas, no recolectamos actividades
+            return global_state
+        
+        # Guardar mensaje en contexto de corto plazo
+        print("[COLLECTOR] Guardando mensaje en contexto a corto plazo")
         db.add_to_short_term_info(user_id, f"[User] {last_msg}")
         
-        # En estas etapas, no recolectamos actividades
+        # Solo recolectar actividades durante etapas específicas
+        if current_stage not in ["ask_last_hour", "ask_next_hour"]:
+            print(f"[COLLECTOR] Etapa {current_stage}: no se recolectan actividades")
+            return global_state
+        
+        # Determinar el contexto temporal (pasado o futuro)
+        time_context = "future" if current_stage == "ask_next_hour" else "past"
+        print(f"[COLLECTOR] Recolectando actividades con contexto: {time_context}")
+        
+        # Clasificar la categoría de la actividad
+        category = classify_activity(last_msg)
+        
+        # Extraer subactividades del mensaje
+        sub_activities = extract_sub_activities(last_msg, time_context)
+        
+        # Si no se detectaron subactividades, crear una por defecto
+        if not sub_activities:
+            print("[COLLECTOR] No se detectaron subactividades, creando una por defecto")
+            filtered_msg = re.split(r'\?', last_msg)[-1].strip() or last_msg
+            default_title = " ".join(filtered_msg.split()[:5]) if filtered_msg.split() else "Actividad"
+            default_activity = {
+                "title": default_title,
+                "category": category,
+                "time_context": time_context
+            }
+            sub_activities = [default_activity]
+        
+        # Procesar cada actividad detectada
+        new_activities = []
+        for sub in sub_activities:
+            # Crear el objeto de actividad
+            activity_id = str(ObjectId())
+            
+            activity_data = {
+                "activity_id": activity_id,
+                "title": sub.get("title", "Sin título"),
+                "category": sub.get("category", category),
+                "time_context": sub.get("time_context", time_context),
+                "timestamp": datetime.utcnow().isoformat(),
+                "original_message": last_msg,
+                "clarification_questions": [],
+                "clarifier_responses": [],
+                "completed": False,
+                "importance": sub.get("importance", 5)
+            }
+            
+            # Generar preguntas de clarificación específicas para esta actividad
+            activity_data["clarification_questions"] = generate_clarification_questions(last_msg, activity_data["title"])
+            
+            # Extraer entidades mencionadas en relación con esta actividad
+            entities = extract_entities_from_activity(last_msg, activity_data["title"])
+            activity_data["entities"] = entities
+            
+            # Añadir análisis inicial de la actividad
+            activity_data["analysis"] = analyze_activity(activity_data["title"], last_msg, time_context)
+            
+            # Guardar la actividad en la base de datos
+            print(f"[COLLECTOR] Guardando actividad: {activity_data['title']}")
+            db.add_activity(user_id, activity_data)
+            
+            # Guardar mensaje de sistema sobre la actividad detectada
+            db.save_conversation_message(
+                user_id,
+                "system", 
+                f"Actividad detectada: {activity_data['title']} (Categoría: {activity_data['category']})",
+                {"step": "activity_collector"}
+            )
+            
+            # Añadir la actividad procesada a la lista
+            new_activities.append(activity_data)
+        
+        # Generar razonamiento sobre todas las actividades detectadas
+        if new_activities:
+            print(f"[COLLECTOR] Generando razonamiento para {len(new_activities)} actividades")
+            reasoning_prompt = (
+                f"El mensaje '{last_msg}' generó las siguientes actividades: "
+                f"{[act['title'] for act in new_activities]}. "
+                f"Explica por qué se detectaron estas actividades específicas y qué elementos permitieron identificarlas. "
+                f"Analiza también qué podrían indicar estas actividades sobre los intereses, prioridades o "
+                f"estado actual del usuario. Elabora un razonamiento detallado pero conciso."
+            )
+            
+            reasoning = ask_gpt(reasoning_prompt)
+            
+            # Guardar el razonamiento en el estado del usuario
+            interaction_entry = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "activities": [{"id": act["activity_id"], "title": act["title"]} for act in new_activities],
+                "reasoning": reasoning
+            }
+            
+            # Actualizar el estado con las nuevas actividades y el razonamiento
+            st.setdefault("interaction_history", []).append(interaction_entry)
+            
+            # Actualizar específicamente las listas de actividades según el contexto temporal
+            if time_context == "past":
+                st.setdefault("activities_last_hour", []).append(interaction_entry)
+            else:
+                st.setdefault("activities_next_hour", []).append(interaction_entry)
+            
+            # Guardar el estado actualizado
+            print("[COLLECTOR] Guardando estado actualizado con nuevas actividades")
+            db.save_state(user_id, st)
+            
+            # Actualizar el estado global para el orquestador
+            global_state["activities"].extend(new_activities)
+            global_state["activity_reasoning"] = reasoning
+        else:
+            print("[COLLECTOR] No se generaron actividades nuevas")
+        
         return global_state
-    
-    # Guardar mensaje en contexto de corto plazo
-    db.add_to_short_term_info(user_id, f"[User] {last_msg}")
-    
-    # Solo recolectar actividades durante etapas específicas
-    stage = st.get("conversation_stage", "initial")
-    if stage not in ["ask_last_hour", "ask_next_hour"]:
+        
+    except Exception as e:
+        print(f"[COLLECTOR] Error en activity_collector_node: {e}")
+        import traceback
+        traceback.print_exc()
+        # Continuamos con el flujo a pesar del error
         return global_state
-    
-    # Determinar el contexto temporal (pasado o futuro)
-    time_context = "future" if stage == "ask_next_hour" else "past"
-    
-    # Clasificar la categoría de la actividad
-    category = classify_activity(last_msg)
-    
-    # Extraer subactividades del mensaje
-    sub_activities = extract_sub_activities(last_msg, time_context)
-    
-    # Si no se detectaron subactividades, crear una por defecto
-    if not sub_activities:
-        filtered_msg = re.split(r'\?', last_msg)[-1].strip() or last_msg
-        default_title = " ".join(filtered_msg.split()[:5]) if filtered_msg.split() else "Actividad"
-        default_activity = {
-            "title": default_title,
-            "category": category,
-            "time_context": time_context
-        }
-        sub_activities = [default_activity]
-    
-    # Procesar cada actividad detectada
-    new_activities = []
-    for sub in sub_activities:
-        # Crear el objeto de actividad
-        activity_id = str(ObjectId())
-        
-        activity_data = {
-            "activity_id": activity_id,
-            "title": sub.get("title", "Sin título"),
-            "category": sub.get("category", category),
-            "time_context": sub.get("time_context", time_context),
-            "timestamp": datetime.utcnow().isoformat(),
-            "original_message": last_msg,
-            "clarification_questions": [],
-            "clarifier_responses": [],
-            "completed": False,
-            "importance": sub.get("importance", 5)
-        }
-        
-        # Generar preguntas de clarificación específicas para esta actividad
-        activity_data["clarification_questions"] = generate_clarification_questions(last_msg, activity_data["title"])
-        
-        # Extraer entidades mencionadas en relación con esta actividad
-        entities = extract_entities_from_activity(last_msg, activity_data["title"])
-        activity_data["entities"] = entities
-        
-        # Añadir análisis inicial de la actividad
-        activity_data["analysis"] = analyze_activity(activity_data["title"], last_msg, time_context)
-        
-        # Guardar la actividad en la base de datos
-        db.add_activity(user_id, activity_data)
-        
-        # Guardar mensaje de sistema sobre la actividad detectada
-        db.save_conversation_message(
-            user_id,
-            "system", 
-            f"Actividad detectada: {activity_data['title']} (Categoría: {activity_data['category']})",
-            {"step": "activity_collector"}
-        )
-        
-        # Añadir la actividad procesada a la lista
-        new_activities.append(activity_data)
-    
-    # Generar razonamiento sobre todas las actividades detectadas
-    reasoning_prompt = (
-        f"El mensaje '{last_msg}' generó las siguientes actividades: "
-        f"{[act['title'] for act in new_activities]}. "
-        f"Explica por qué se detectaron estas actividades específicas y qué elementos permitieron identificarlas. "
-        f"Analiza también qué podrían indicar estas actividades sobre los intereses, prioridades o "
-        f"estado actual del usuario. Elabora un razonamiento detallado pero conciso."
-    )
-    
-    reasoning = ask_gpt(reasoning_prompt)
-    
-    # Guardar el razonamiento en el estado del usuario
-    interaction_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "activities": [{"id": act["activity_id"], "title": act["title"]} for act in new_activities],
-        "reasoning": reasoning
-    }
-    
-    # Actualizar el estado con las nuevas actividades y el razonamiento
-    st.setdefault("interaction_history", []).append(interaction_entry)
-    
-    # Actualizar específicamente las listas de actividades según el contexto temporal
-    if time_context == "past":
-        st.setdefault("activities_last_hour", []).append(interaction_entry)
-    else:
-        st.setdefault("activities_next_hour", []).append(interaction_entry)
-    
-    # Guardar el estado actualizado
-    db.save_state(user_id, st)
-    
-    # Actualizar el estado global para el orquestador
-    global_state["activities"].extend(new_activities)
-    global_state["activity_reasoning"] = reasoning
-    
-    return global_state
 
 def classify_activity(msg: str) -> str:
     """Clasifica el tipo de actividad basado en el mensaje del usuario."""

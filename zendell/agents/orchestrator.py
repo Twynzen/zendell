@@ -31,14 +31,7 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     # Obtener el estado actual del usuario
     try:
         state = db_manager.get_state(user_id)
-        
-        # Verificar si hay campo general_info, si no existe añadirlo
-        if "general_info" not in state:
-            state["general_info"] = {}
-            db_manager.save_state(user_id, state)
-            print("[ORCHESTRATOR] Añadido campo general_info al estado del usuario")
-            
-        print(f"[ORCHESTRATOR] Estado actual: conversation_stage={state.get('conversation_stage', 'initial')}, name={state.get('name', 'Desconocido')}")
+        print(f"[ORCHESTRATOR] Estado cargado correctamente: {state.keys()}")
     except Exception as e:
         print(f"[ORCHESTRATOR] Error al obtener estado del usuario: {e}")
         # Estado por defecto si hay error
@@ -50,6 +43,30 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
             "general_info": {}
         }
     
+    # Verificar y asegurar que el estado tenga todos los campos necesarios
+    if "name" not in state:
+        state["name"] = "Desconocido"
+        print("[ORCHESTRATOR] Campo 'name' faltante, añadido valor por defecto")
+    
+    if "conversation_stage" not in state:
+        state["conversation_stage"] = "initial"
+        print("[ORCHESTRATOR] Campo 'conversation_stage' faltante, añadido valor por defecto")
+    
+    if "short_term_info" not in state:
+        state["short_term_info"] = []
+        print("[ORCHESTRATOR] Campo 'short_term_info' faltante, añadido valor por defecto")
+    
+    if "general_info" not in state:
+        state["general_info"] = {}
+        print("[ORCHESTRATOR] Campo 'general_info' faltante, añadido valor por defecto")
+    
+    # Asegurarse de que estos cambios se guarden
+    try:
+        db_manager.save_state(user_id, state)
+        print("[ORCHESTRATOR] Estado verificado y guardado correctamente")
+    except Exception as e:
+        print(f"[ORCHESTRATOR] Error al guardar estado inicial: {e}")
+    
     # Verificar si hay un override para la etapa
     stage = state.get("conversation_stage", "initial")
     if state.get("conversation_stage_override"):
@@ -57,7 +74,10 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
         stage = state["conversation_stage_override"]
         # Limpiar el override una vez usado
         state["conversation_stage_override"] = None
-        db_manager.save_state(user_id, state)
+        try:
+            db_manager.save_state(user_id, state)
+        except Exception as e:
+            print(f"[ORCHESTRATOR] Error al guardar estado después de override: {e}")
     
     # Inicializar el estado global que se pasará entre agentes
     global_state = {
@@ -79,10 +99,16 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
         global_state = activity_collector_node(global_state)
     except Exception as e:
         print(f"[ORCHESTRATOR] Error en activity_collector_node: {e}")
+        import traceback
+        traceback.print_exc()
         # Continuamos con el flujo a pesar del error
     
     # 2) Volver a cargar el estado (pudo cambiar en el collector)
-    state = db_manager.get_state(user_id)
+    try:
+        state = db_manager.get_state(user_id)
+    except Exception as e:
+        print(f"[ORCHESTRATOR] Error al recargar estado después de collector: {e}")
+        # Seguimos con el estado que ya teníamos
     
     # Determinar los campos faltantes en el perfil
     missing_fields = get_missing_profile_fields(state)
@@ -226,19 +252,27 @@ def get_missing_profile_fields(state: dict) -> list:
     """Determina qué campos del perfil faltan por completar."""
     fields = []
     
-    # Verificar nombre
-    if state.get("name", "Desconocido") in ["", "Desconocido"]:
+    # Verificar nombre (podría estar en el estado directamente o en general_info)
+    name_in_state = state.get("name", "")
+    name_in_info = state.get("general_info", {}).get("name", "")
+    
+    # Usamos el nombre que tengamos disponible, priorizando el que esté en el estado directamente
+    if not name_in_state and not name_in_info:
         fields.append("nombre")
     
     # Verificar información general
     info = state.get("general_info", {})
+    
     if not info.get("ocupacion", ""):
         fields.append("ocupacion")
+    
     if not info.get("gustos", ""):
         fields.append("gustos")
+    
     if not info.get("metas", ""):
         fields.append("metas")
     
+    print(f"[ORCHESTRATOR] Campos faltantes en el perfil: {fields}")
     return fields
 
 def get_time_ranges() -> dict:

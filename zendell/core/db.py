@@ -240,25 +240,64 @@ class MongoDBManager:
     
     def get_state(self, user_id: str) -> Dict[str, Any]:
         """Obtiene el estado actual del usuario."""
-        doc = self.user_states_coll.find_one({"user_id": user_id})
-        if not doc:
-            # Crear un estado inicial
-            profile = self.get_user_profile(user_id)
-            
-            initial_state = UserState(
-                user_id=user_id,
-                name=profile.general_info.name if profile.general_info.name else "Desconocido",
-                last_interaction_time="",
-                daily_interaction_count=0,
-                last_interaction_date="",
-                conversation_stage="initial",
-                short_term_info=[]
-            )
-            state_dict = initial_state.to_dict()
-            self.user_states_coll.insert_one(state_dict)
-            return state_dict
+        print(f"[DB] Obteniendo estado para user_id: {user_id}")
         
-        return doc
+        try:
+            doc = self.user_states_coll.find_one({"user_id": user_id})
+            
+            if not doc:
+                print(f"[DB] No se encontró estado para user_id: {user_id}, creando uno nuevo")
+                
+                # Crear un estado inicial
+                initial_state = {
+                    "user_id": user_id,
+                    "name": "Desconocido",
+                    "last_interaction_time": "",
+                    "daily_interaction_count": 0,
+                    "last_interaction_date": "",
+                    "conversation_stage": "initial",
+                    "short_term_info": [],
+                    "general_info": {}
+                }
+                
+                # Insertar el nuevo estado
+                self.user_states_coll.insert_one(initial_state)
+                return initial_state
+            
+            # Verificar campos esenciales y añadirlos si faltan
+            if "name" not in doc:
+                doc["name"] = "Desconocido"
+            
+            if "conversation_stage" not in doc:
+                doc["conversation_stage"] = "initial"
+            
+            if "short_term_info" not in doc:
+                doc["short_term_info"] = []
+            
+            if "general_info" not in doc:
+                doc["general_info"] = {}
+            
+            # Guardar el estado con los campos añadidos si es necesario
+            if any(field not in doc for field in ["name", "conversation_stage", "short_term_info", "general_info"]):
+                self.user_states_coll.update_one({"user_id": user_id}, {"$set": doc})
+                print(f"[DB] Estado actualizado con campos faltantes para user_id: {user_id}")
+            
+            print(f"[DB] Estado recuperado correctamente para user_id: {user_id}")
+            return doc
+        
+        except Exception as e:
+            print(f"[DB] Error al obtener estado para user_id {user_id}: {e}")
+            # Devolver un estado por defecto en caso de error
+            return {
+                "user_id": user_id,
+                "name": "Desconocido",
+                "last_interaction_time": "",
+                "daily_interaction_count": 0,
+                "last_interaction_date": "",
+                "conversation_stage": "initial",
+                "short_term_info": [],
+                "general_info": {}
+            }
     
     def save_state(self, user_id: str, state: Dict[str, Any]) -> None:
         """Guarda el estado actual del usuario."""
