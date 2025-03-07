@@ -21,7 +21,6 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     
     # Inicializar el gestor de memoria si está disponible, o None si no lo está
     try:
-        from zendell.core.memory_manager import MemoryManager
         memory_manager = MemoryManager(db_manager)
         print("[ORCHESTRATOR] Memory Manager inicializado correctamente")
     except Exception as e:
@@ -34,7 +33,6 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
         print(f"[ORCHESTRATOR] Estado cargado correctamente: {state.keys()}")
     except Exception as e:
         print(f"[ORCHESTRATOR] Error al obtener estado del usuario: {e}")
-        # Estado por defecto si hay error
         state = {
             "user_id": user_id,
             "name": "Desconocido",
@@ -47,20 +45,16 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     if "name" not in state:
         state["name"] = "Desconocido"
         print("[ORCHESTRATOR] Campo 'name' faltante, añadido valor por defecto")
-    
     if "conversation_stage" not in state:
         state["conversation_stage"] = "initial"
         print("[ORCHESTRATOR] Campo 'conversation_stage' faltante, añadido valor por defecto")
-    
     if "short_term_info" not in state:
         state["short_term_info"] = []
         print("[ORCHESTRATOR] Campo 'short_term_info' faltante, añadido valor por defecto")
-    
     if "general_info" not in state:
         state["general_info"] = {}
         print("[ORCHESTRATOR] Campo 'general_info' faltante, añadido valor por defecto")
     
-    # Asegurarse de que estos cambios se guarden
     try:
         db_manager.save_state(user_id, state)
         print("[ORCHESTRATOR] Estado verificado y guardado correctamente")
@@ -72,7 +66,6 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     if state.get("conversation_stage_override"):
         print(f"[ORCHESTRATOR] Detected conversation_stage_override={state['conversation_stage_override']}")
         stage = state["conversation_stage_override"]
-        # Limpiar el override una vez usado
         state["conversation_stage_override"] = None
         try:
             db_manager.save_state(user_id, state)
@@ -101,14 +94,12 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
         print(f"[ORCHESTRATOR] Error en activity_collector_node: {e}")
         import traceback
         traceback.print_exc()
-        # Continuamos con el flujo a pesar del error
     
     # 2) Volver a cargar el estado (pudo cambiar en el collector)
     try:
         state = db_manager.get_state(user_id)
     except Exception as e:
         print(f"[ORCHESTRATOR] Error al recargar estado después de collector: {e}")
-        # Seguimos con el estado que ya teníamos
     
     # Determinar los campos faltantes en el perfil
     missing_fields = get_missing_profile_fields(state)
@@ -124,130 +115,129 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     # Manejar cada etapa de la conversación
     if stage == "initial":
         if missing_fields:
-            # Si faltan campos del perfil, pasar a ask_profile
             stage = "ask_profile"
             reply = generate_profile_request(db_manager, user_id, missing_fields)
         else:
-            # Si el perfil está completo, pasar a preguntar por la última hora
             stage = "ask_last_hour"
             reply = generate_last_hour_question(db_manager, user_id, time_ranges)
     
     elif stage == "ask_profile":
         if missing_fields:
-            # Aún faltan campos, seguir pidiendo información
             reply = generate_profile_request(db_manager, user_id, missing_fields)
         else:
-            # Perfil completo, avanzar a preguntar por la última hora
             stage = "ask_last_hour"
             reply = generate_last_hour_question(db_manager, user_id, time_ranges)
     
     elif stage == "ask_last_hour":
-        # Pasar a la etapa de clarificación de actividades pasadas
         stage = "clarifier_last_hour"
         global_state["current_period"] = "past"
-        
-        # Importar clarifier_node solo cuando se necesita con manejo de errores
         try:
             from zendell.agents.clarifier import clarifier_node
             global_state = clarifier_node(global_state)
-            
             questions = global_state.get("clarification_questions", [])
             if questions:
-                # Generar mensaje con preguntas de clarificación
                 reply = generate_clarification_message(db_manager, user_id, questions, "clarifier_last_hour")
             else:
-                # Si no hay preguntas, mensaje genérico y continuar
                 reply = "Gracias por compartir lo que hiciste. No necesito más detalles sobre eso."
-                stage = "ask_next_hour"  # Avanzar directamente
+                stage = "ask_next_hour"
         except Exception as e:
             print(f"[ORCHESTRATOR] Error en clarifier_node para past: {e}")
-            # Mensaje genérico y continuar con el flujo
             reply = "Gracias por compartir lo que hiciste. Pasemos a lo siguiente."
-            stage = "ask_next_hour"  # Avanzar directamente
+            stage = "ask_next_hour"
     
     elif stage == "clarifier_last_hour":
-        # Procesar la respuesta a las preguntas de clarificación
         try:
             from zendell.agents.clarifier import process_clarifier_response
             global_state["user_clarifier_response"] = last_message
             global_state = process_clarifier_response(global_state)
-            
-            # Avanzar a preguntar por la próxima hora
             stage = "ask_next_hour"
             reply = generate_next_hour_question(db_manager, user_id, time_ranges)
         except Exception as e:
             print(f"[ORCHESTRATOR] Error en process_clarifier_response para past: {e}")
-            # Avanzar al siguiente paso a pesar del error
             stage = "ask_next_hour"
             reply = generate_next_hour_question(db_manager, user_id, time_ranges)
     
     elif stage == "ask_next_hour":
-        # Pasar a la etapa de clarificación de actividades futuras
         stage = "clarifier_next_hour"
         global_state["current_period"] = "future"
-        
         from zendell.agents.clarifier import clarifier_node
         global_state = clarifier_node(global_state)
-        
         questions = global_state.get("clarification_questions", [])
         if questions:
-            # Generar mensaje con preguntas de clarificación
             reply = generate_clarification_message(db_manager, user_id, questions, "clarifier_next_hour")
         else:
-            # Si no hay preguntas, mensaje genérico y continuar
             reply = "Gracias por compartir tus planes. No necesito más detalles sobre eso."
-            stage = "final"  # Avanzar directamente
+            stage = "final"
     
     elif stage == "clarifier_next_hour":
-        # Procesar la respuesta a las preguntas de clarificación
-        from zendell.agents.clarifier import process_clarifier_response
-        global_state["user_clarifier_response"] = last_message
-        global_state = process_clarifier_response(global_state)
+        # Bloque actualizado para la etapa clarifier_next_hour
+        try:
+            print("[ORCHESTRATOR] Procesando respuesta de clarificación para actividades futuras")
+            from zendell.agents.clarifier import process_clarifier_response
+            global_state["user_clarifier_response"] = last_message
+            global_state = process_clarifier_response(global_state)
+            
+            # Realizar análisis sobre las actividades recopiladas
+            try:
+                print("[ORCHESTRATOR] Iniciando análisis de actividades")
+                from zendell.agents.analyzer import analyzer_node
+                global_state = analyzer_node(global_state)
+                print("[ORCHESTRATOR] Análisis completado")
+            except Exception as e:
+                print(f"[ORCHESTRATOR] Error en analyzer_node: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Generar recomendaciones basadas en el análisis
+            try:
+                print("[ORCHESTRATOR] Generando recomendaciones")
+                from zendell.agents.recommender import recommender_node
+                global_state = recommender_node(global_state)
+                print("[ORCHESTRATOR] Recomendaciones generadas")
+            except Exception as e:
+                print(f"[ORCHESTRATOR] Error en recommender_node: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Avanzar a la etapa final
+            stage = "final"
+            
+            # Generar mensaje final con insights y recomendaciones
+            try:
+                reply = generate_final_message(db_manager, user_id, global_state)
+            except Exception as e:
+                print(f"[ORCHESTRATOR] Error al generar mensaje final: {e}")
+                reply = ("¡Gracias por toda la información que has compartido! Ha sido muy útil conocer más sobre ti y "
+                         "tus actividades. Volveré a contactarte pronto para seguir aprendiendo. ¿Hay algo más en que pueda ayudarte por ahora?")
         
-        # Realizar análisis sobre las actividades recopiladas
-        from zendell.agents.analyzer import analyzer_node
-        global_state = analyzer_node(global_state)
-        
-        # Generar recomendaciones basadas en el análisis
-        from zendell.agents.recommender import recommender_node
-        global_state = recommender_node(global_state)
-        
-        # Avanzar a la etapa final
-        stage = "final"
-        
-        # Generar mensaje final con insights y recomendaciones
-        reply = generate_final_message(db_manager, user_id, global_state)
+        except Exception as e:
+            print(f"[ORCHESTRATOR] Error en la etapa clarifier_next_hour: {e}")
+            import traceback
+            traceback.print_exc()
+            stage = "final"
+            reply = ("Gracias por compartir tus planes y responder a mis preguntas. He guardado toda esta información. "
+                     "¿Hay algo más en lo que pueda ayudarte antes de terminar esta conversación?")
     
     elif stage == "final":
-        # Generar una respuesta de cierre y preparar para la próxima interacción
         reply = generate_closing_message(db_manager, user_id)
-        
-        # Actualizar información a largo plazo
         update_long_term_memory(db_manager, memory_manager, user_id)
-        
-        # Reiniciar el ciclo para la próxima interacción
         stage = "initial"
     
     else:
-        # Etapa desconocida, reiniciar por seguridad
         stage = "initial"
         reply = "Parece que hubo un problema en nuestra conversación. ¿Podemos empezar de nuevo?"
     
     # Actualizar la etapa de conversación en el estado
     state["conversation_stage"] = stage
     db_manager.save_state(user_id, state)
-    
-    # Guardar la respuesta en los logs de conversación
     db_manager.save_conversation_message(user_id, "assistant", reply, {"step": stage})
     
     print(f"[ORCHESTRATOR] END => new_stage={stage}, reply='{reply[:60]}...'")
     
-    # Devolver el resultado del flujo
     return {
         "global_state": global_state,
         "final_text": reply
     }
-
 def get_missing_profile_fields(state: dict) -> list:
     """Determina qué campos del perfil faltan por completar."""
     fields = []
