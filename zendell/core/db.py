@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Union, Tuple, Set
 from bson.objectid import ObjectId
 from pymongo import MongoClient, ASCENDING, DESCENDING
+from core.utils import get_timestamp
 from zendell.services.llm_provider import ask_gpt
 from zendell.core.db_models import (
     UserProfile, UserState, Activity, ConversationMessage, 
@@ -111,7 +112,7 @@ class MongoDBManager:
     
     def extract_and_update_user_info(self, user_id: str, message: str) -> Dict[str, Any]:
         """Extrae información del usuario del mensaje y actualiza su perfil."""
-        print(f"[DB] Extrayendo información del usuario del mensaje: '{message[:50]}...'")
+        print(f"{get_timestamp()}",f"[DB] Extrayendo información del usuario del mensaje: '{message[:50]}...'")
         
         prompt = (
             "Analiza el siguiente mensaje y extrae datos personales relevantes sobre el usuario. "
@@ -126,7 +127,7 @@ class MongoDBManager:
         )
         
         response = ask_gpt(prompt)
-        print(f"[DB] Respuesta de extracción de info de usuario: '{response[:100]}...'")
+        print(f"{get_timestamp()}",f"[DB] Respuesta de extracción de info de usuario: '{response[:100]}...'")
         
         try:
             import json
@@ -147,11 +148,11 @@ class MongoDBManager:
                 if cleaned_response:
                     extracted_info = json.loads(cleaned_response)
                 else:
-                    print("[DB] No se pudo extraer JSON de información de usuario, devolviendo diccionario vacío")
+                    print(f"{get_timestamp()}","[DB] No se pudo extraer JSON de información de usuario, devolviendo diccionario vacío")
                     return {}
             
             # Mostrar la información extraída
-            print(f"[DB] Información extraída del usuario: {extracted_info}")
+            print(f"{get_timestamp()}",f"[DB] Información extraída del usuario: {extracted_info}")
             
             # Actualizar el estado del usuario directamente
             state = self.get_state(user_id)
@@ -163,13 +164,13 @@ class MongoDBManager:
             # Actualizar el nombre en el estado directamente
             if extracted_info.get("name"):
                 state["name"] = extracted_info["name"]
-                print(f"[DB] Nombre en el estado actualizado a: {extracted_info['name']}")
+                print(f"{get_timestamp()}",f"[DB] Nombre en el estado actualizado a: {extracted_info['name']}")
             
             # Actualizar los campos en general_info
             for field in ["name", "ocupacion", "gustos", "metas"]:
                 if field in extracted_info and extracted_info[field]:
                     state["general_info"][field] = extracted_info[field]
-                    print(f"[DB] Campo '{field}' actualizado en general_info: {extracted_info[field]}")
+                    print(f"{get_timestamp()}",f"[DB] Campo '{field}' actualizado en general_info: {extracted_info[field]}")
             
             # Guardar el estado actualizado
             self.save_state(user_id, state)
@@ -182,12 +183,12 @@ class MongoDBManager:
                         setattr(profile.general_info, field, value)
                 self.update_user_profile(profile)
             except Exception as e:
-                print(f"[DB] Error al actualizar perfil: {e}")
+                print(f"{get_timestamp()}",f"[DB] Error al actualizar perfil: {e}")
             
             return extracted_info
             
         except Exception as e:
-            print(f"[DB] Error al procesar la información extraída: {e}")
+            print(f"{get_timestamp()}",f"[DB] Error al procesar la información extraída: {e}")
             return {}
         
     def generate_user_summary(self, user_id: str) -> str:
@@ -240,13 +241,13 @@ class MongoDBManager:
     
     def get_state(self, user_id: str) -> Dict[str, Any]:
         """Obtiene el estado actual del usuario."""
-        print(f"[DB] Obteniendo estado para user_id: {user_id}")
+        print(f"{get_timestamp()}",f"[DB] Obteniendo estado para user_id: {user_id}")
         
         try:
             doc = self.user_states_coll.find_one({"user_id": user_id})
             
             if not doc:
-                print(f"[DB] No se encontró estado para user_id: {user_id}, creando uno nuevo")
+                print(f"{get_timestamp()}",f"[DB] No se encontró estado para user_id: {user_id}, creando uno nuevo")
                 
                 # Crear un estado inicial
                 initial_state = {
@@ -280,13 +281,13 @@ class MongoDBManager:
             # Guardar el estado con los campos añadidos si es necesario
             if any(field not in doc for field in ["name", "conversation_stage", "short_term_info", "general_info"]):
                 self.user_states_coll.update_one({"user_id": user_id}, {"$set": doc})
-                print(f"[DB] Estado actualizado con campos faltantes para user_id: {user_id}")
+                print(f"{get_timestamp()}",f"[DB] Estado actualizado con campos faltantes para user_id: {user_id}")
             
-            print(f"[DB] Estado recuperado correctamente para user_id: {user_id}")
+            print(f"{get_timestamp()}",f"[DB] Estado recuperado correctamente para user_id: {user_id}")
             return doc
         
         except Exception as e:
-            print(f"[DB] Error al obtener estado para user_id {user_id}: {e}")
+            print(f"{get_timestamp()}",f"[DB] Error al obtener estado para user_id {user_id}: {e}")
             # Devolver un estado por defecto en caso de error
             return {
                 "user_id": user_id,
@@ -562,14 +563,14 @@ class MongoDBManager:
             return analysis
             
         except Exception as e:
-            print(f"Error al analizar la conversación: {e}")
+            print(f"{get_timestamp()}",f"Error al analizar la conversación: {e}")
             return {"mood": "neutral", "topics": [], "insights": []}
     
     # ======== MÉTODOS PARA ENTIDADES ========
     
     def _extract_entities_from_message(self, user_id: str, message: str) -> List[Dict[str, Any]]:
         """Extrae entidades (personas, lugares, conceptos) de un mensaje."""
-        print(f"[DB] Extrayendo entidades del mensaje: '{message[:50]}...'")
+        print(f"{get_timestamp()}",f"[DB] Extrayendo entidades del mensaje: '{message[:50]}...'")
         
         prompt = (
             "Extrae entidades mencionadas en el siguiente mensaje. Devuelve un JSON con esta estructura:\n"
@@ -585,7 +586,7 @@ class MongoDBManager:
         )
         
         response = ask_gpt(prompt)
-        print(f"[DB] Respuesta del LLM (primeros 100 caracteres): '{response[:100]}...'")
+        print(f"{get_timestamp()}",f"[DB] Respuesta del LLM (primeros 100 caracteres): '{response[:100]}...'")
         
         entities_found = []
         
@@ -600,18 +601,18 @@ class MongoDBManager:
             
             if matches:
                 json_str = matches.group(1)
-                print(f"[DB] JSON extraído: '{json_str[:50]}...'")
+                print(f"{get_timestamp()}",f"[DB] JSON extraído: '{json_str[:50]}...'")
                 extracted = json.loads(json_str)
             else:
                 # Intentar limpiar eliminando texto antes y después de llaves
                 cleaned_response = re.sub(r'^[^{]*', '', response)
                 cleaned_response = re.sub(r'[^}]*$', '', cleaned_response)
-                print(f"[DB] Respuesta limpiada: '{cleaned_response[:50]}...'")
+                print(f"{get_timestamp()}",f"[DB] Respuesta limpiada: '{cleaned_response[:50]}...'")
                 
                 if cleaned_response:
                     extracted = json.loads(cleaned_response)
                 else:
-                    print("[DB] No se pudo extraer JSON, devolviendo lista vacía")
+                    print(f"{get_timestamp()}","[DB] No se pudo extraer JSON, devolviendo lista vacía")
                     return []
             
             # Procesar las entidades encontradas
@@ -623,7 +624,7 @@ class MongoDBManager:
                 if not entity_name or not entity_type:
                     continue
                 
-                print(f"[DB] Entidad encontrada: {entity_name} ({entity_type})")
+                print(f"{get_timestamp()}",f"[DB] Entidad encontrada: {entity_name} ({entity_type})")
                 
                 # Generar un ID único para la entidad
                 entity_id = str(ObjectId())
@@ -656,17 +657,17 @@ class MongoDBManager:
                             "$inc": {"mention_count": 1}
                         }
                     )
-                    print(f"[DB] Entidad actualizada: {entity_id}")
+                    print(f"{get_timestamp()}",f"[DB] Entidad actualizada: {entity_id}")
                 else:
                     # Insertar la nueva entidad directamente como diccionario
                     self.entities_coll.insert_one(entity_data)
-                    print(f"[DB] Nueva entidad creada: {entity_id}")
+                    print(f"{get_timestamp()}",f"[DB] Nueva entidad creada: {entity_id}")
                 
                 # Añadir entidad al perfil del usuario
                 try:
                     self.add_entity_to_user_profile(user_id, entity_type, entity_id)
                 except Exception as e:
-                    print(f"[DB] Error al añadir entidad al perfil del usuario: {e}")
+                    print(f"{get_timestamp()}",f"[DB] Error al añadir entidad al perfil del usuario: {e}")
                 
                 # Añadir a la lista de entidades encontradas
                 entities_found.append({
@@ -679,7 +680,7 @@ class MongoDBManager:
             return entities_found
                 
         except Exception as e:
-            print(f"[DB] Error al extraer entidades: {e}")
+            print(f"{get_timestamp()}",f"[DB] Error al extraer entidades: {e}")
             # Devolvemos una lista vacía para no bloquear el flujo
             return []
         
