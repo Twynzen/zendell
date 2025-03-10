@@ -1,5 +1,7 @@
 CONTEXTO DEL PROYECTO ACTUAL: # ZENDELL: Ecosistema Multiagente Proactivo
 
+(EL PROYECTO ESTA EN ETAPAS DE TESTEO Y MEJORAS)
+
 > **Asistente “super inteligente” que te acompaña durante el día, iniciando conversaciones, recopilando información y adaptándose a tus necesidades.**  
 
 ## 1. ZENDELL es un conjunto de agentes inteligentes que trabajan en equipo para:
@@ -45,9 +47,6 @@ El proyecto se organiza en varias carpetas clave dentro de `zendell/`:
 - `llm_provider.py`: Interfaz para llamar a OpenAI GPT.  
 - `messaging_service.py`: Pensado para integrar otros canales (WhatsApp, email, etc.).  
 
-### **5. tests/**  
-- Pruebas del sistema (por ejemplo, usando `pytest`).  
-
 Adicionalmente, hay archivos de configuración (`docker-compose.yml`, `pyproject.toml`, `requirements.txt`, etc.) para desplegar o instalar dependencias.
 
 ## 4. Flujo de Ejecución
@@ -68,7 +67,8 @@ Adicionalmente, hay archivos de configuración (`docker-compose.yml`, `pyproject
 - **Orchestrator** llama a:  
   1. **Activity Collector** → almacena nueva info.  
   2. **Analyzer** → analiza estado de ánimo y patrones.  
-  3. **Recommender** → genera consejos o próximos pasos.  
+
+
 
 ### **5. Persistencia**  
 - Todo se guarda en MongoDB: desde datos de usuario hasta logs de conversación, permitiendo rastrear el historial y mejorar la experiencia.  
