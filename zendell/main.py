@@ -3,6 +3,7 @@ import warnings
 import signal
 import sys
 from datetime import datetime
+from core.utils import get_timestamp
 from zendell.core.db import MongoDBManager
 from zendell.core.memory_manager import MemoryManager
 from zendell.agents.communicator import Communicator
@@ -26,7 +27,7 @@ async def hourly_interaction_loop(communicator, interval_minutes=60):
     # Convertir minutos a segundos
     interval_seconds = interval_minutes * 60
     
-    print(f"[MAIN] Iniciando bucle de interacción cada {interval_minutes} minutos")
+    print(f"{get_timestamp()}",f"[MAIN] Iniciando bucle de interacción cada {interval_minutes} minutos")
     
     while running:
         try:
@@ -36,7 +37,7 @@ async def hourly_interaction_loop(communicator, interval_minutes=60):
             # Iniciar interacción con cada usuario activo
             for user_id in user_ids:
                 if user_id:
-                    print(f"[HOURLY INTERACTION] Iniciando interacción con user_id: {user_id}")
+                    print(f"{get_timestamp()}",f"[HOURLY INTERACTION] Iniciando interacción con user_id: {user_id}")
                     
                     # Verificar último tiempo de interacción antes de iniciar
                     state = communicator.db_manager.get_state(user_id)
@@ -50,7 +51,7 @@ async def hourly_interaction_loop(communicator, interval_minutes=60):
                             
                             # Solo interactuar si ha pasado suficiente tiempo
                             if elapsed_minutes < interval_minutes:
-                                print(f"[HOURLY INTERACTION] Omitiendo interacción con {user_id}, "
+                                print(f"{get_timestamp()}",f"[HOURLY INTERACTION] Omitiendo interacción con {user_id}, "
                                      f"solo han pasado {elapsed_minutes:.1f} minutos de {interval_minutes}")
                                 continue
                         except ValueError:
@@ -65,7 +66,7 @@ async def hourly_interaction_loop(communicator, interval_minutes=60):
             await asyncio.sleep(interval_seconds)
             
         except Exception as e:
-            print(f"[ERROR] en bucle de interacción: {e}")
+            print(f"{get_timestamp()}",f"[ERROR] en bucle de interacción: {e}")
             # Continuar con la siguiente iteración tras un breve retraso
             await asyncio.sleep(60)
 
@@ -80,11 +81,11 @@ async def maintenance_tasks_loop(db_manager, interval_hours=24):
     # Convertir horas a segundos
     interval_seconds = interval_hours * 3600
     
-    print(f"[MAIN] Iniciando bucle de mantenimiento cada {interval_hours} horas")
+    print(f"{get_timestamp()}",f"{get_timestamp()}",f"[MAIN] Iniciando bucle de mantenimiento cada {interval_hours} horas")
     
     while running:
         try:
-            print("[MAINTENANCE] Iniciando tareas de mantenimiento")
+            print(f"{get_timestamp()}","[MAINTENANCE] Iniciando tareas de mantenimiento")
             
             # Inicializar el gestor de memoria
             memory_manager = MemoryManager(db_manager)
@@ -96,34 +97,34 @@ async def maintenance_tasks_loop(db_manager, interval_hours=24):
                 if not user_id:
                     continue
                 
-                print(f"[MAINTENANCE] Procesando usuario: {user_id}")
+                print(f"{get_timestamp()}",f"[MAINTENANCE] Procesando usuario: {user_id}")
                 
                 # Generar reflexión a largo plazo (actualiza perfil del usuario)
                 try:
                     memory_manager.generate_long_term_reflection(user_id)
-                    print(f"[MAINTENANCE] Reflexión a largo plazo generada para {user_id}")
+                    print(f"{get_timestamp()}",f"[MAINTENANCE] Reflexión a largo plazo generada para {user_id}")
                 except Exception as e:
-                    print(f"[ERROR] al generar reflexión para {user_id}: {e}")
+                    print(f"{get_timestamp()}",f"[ERROR] al generar reflexión para {user_id}: {e}")
                 
                 # Generar insights del sistema
                 try:
                     insights = db_manager.generate_system_insights(user_id)
-                    print(f"[MAINTENANCE] {len(insights)} insights generados para {user_id}")
+                    print(f"{get_timestamp()}",f"[MAINTENANCE] {len(insights)} insights generados para {user_id}")
                 except Exception as e:
-                    print(f"[ERROR] al generar insights para {user_id}: {e}")
+                    print(f"{get_timestamp()}",f"[ERROR] al generar insights para {user_id}: {e}")
             
             # Esperar hasta la próxima iteración
             await asyncio.sleep(interval_seconds)
             
         except Exception as e:
-            print(f"[ERROR] en bucle de mantenimiento: {e}")
+            print(f"{get_timestamp()}",f"[ERROR] en bucle de mantenimiento: {e}")
             # Continuar con la siguiente iteración tras un breve retraso
             await asyncio.sleep(3600)
 
 def handle_exit(sig, frame):
     """Manejador de señales para salida limpia."""
     global running
-    print(f"[MAIN] Recibida señal de interrupción ({sig}). Cerrando...")
+    print(f"{get_timestamp()}",f"[MAIN] Recibida señal de interrupción ({sig}). Cerrando...")
     running = False
     
     # Cerrar la conexión de Discord
@@ -140,7 +141,7 @@ async def main_async():
     signal.signal(signal.SIGINT, handle_exit)
     signal.signal(signal.SIGTERM, handle_exit)
     
-    print("[MAIN] Iniciando ZENDELL - Sistema Multiagente Proactivo")
+    print(f"{get_timestamp()}","[MAIN] Iniciando ZENDELL - Sistema Multiagente Proactivo")
     
     try:
         # Inicializar conexión a la base de datos
@@ -148,12 +149,12 @@ async def main_async():
             uri="mongodb://root:rootpass@localhost:27017/?authSource=admin", 
             db_name="zendell_db"
         )
-        print("[MAIN] Conexión a MongoDB establecida")
+        print(f"{get_timestamp()}","[MAIN] Conexión a MongoDB establecida")
         
         # Inicializar el comunicador
         communicator = Communicator(db_manager)
         client.communicator = communicator
-        print("[MAIN] Comunicador inicializado")
+        print(f"{get_timestamp()}","[MAIN] Comunicador inicializado")
         
         # Obtener el bucle de eventos
         loop = asyncio.get_event_loop()
@@ -167,7 +168,7 @@ async def main_async():
         await asyncio.gather(task_bot, task_hourly, task_maintenance)
         
     except Exception as e:
-        print(f"[ERROR CRÍTICO] en main_async: {e}")
+        print(f"{get_timestamp()}",f"[ERROR CRÍTICO] en main_async: {e}")
         sys.exit(1)
 
 def main():
@@ -175,9 +176,9 @@ def main():
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:
-        print("[MAIN] Programa terminado por interrupción de teclado")
+        print(f"{get_timestamp()}","[MAIN] Programa terminado por interrupción de teclado")
     except Exception as e:
-        print(f"[ERROR FATAL] en main: {e}")
+        print(f"{get_timestamp()}",f"[ERROR FATAL] en main: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

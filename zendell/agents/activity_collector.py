@@ -3,6 +3,7 @@
 import json
 import re
 from datetime import datetime
+from core.utils import get_timestamp
 from zendell.services.llm_provider import ask_gpt
 from bson.objectid import ObjectId
 
@@ -20,21 +21,21 @@ def activity_collector_node(global_state: dict) -> dict:
     last_msg = global_state.get("last_message", "")
     db = global_state["db"]
     
-    print(f"[COLLECTOR] Procesando mensaje de usuario: '{last_msg[:50]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Procesando mensaje de usuario: '{last_msg[:50]}...'")
     
     if not last_msg:
-        print("[COLLECTOR] Mensaje vacío, no hay nada que procesar")
+        print(f"{get_timestamp()}","[COLLECTOR] Mensaje vacío, no hay nada que procesar")
         return global_state
     
     try:
         # Obtener el estado actual del usuario como diccionario
         st = db.get_state(user_id)
-        print(f"[COLLECTOR] Estado del usuario cargado: {st.keys()}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Estado del usuario cargado: {st.keys()}")
         
         # Si estamos en etapas iniciales, extraer información para el perfil
         current_stage = st.get("conversation_stage", "initial")
         if current_stage in ["initial", "ask_profile"]:
-            print(f"[COLLECTOR] Etapa {current_stage}: extrayendo información de perfil")
+            print(f"{get_timestamp()}",f"[COLLECTOR] Etapa {current_stage}: extrayendo información de perfil")
             
             # Extraer y actualizar la información del perfil
             extracted_info = db.extract_and_update_user_info(user_id, last_msg)
@@ -46,17 +47,17 @@ def activity_collector_node(global_state: dict) -> dict:
             return global_state
         
         # Guardar mensaje en contexto de corto plazo
-        print("[COLLECTOR] Guardando mensaje en contexto a corto plazo")
+        print(f"{get_timestamp()}","[COLLECTOR] Guardando mensaje en contexto a corto plazo")
         db.add_to_short_term_info(user_id, f"[User] {last_msg}")
         
         # Solo recolectar actividades durante etapas específicas
         if current_stage not in ["ask_last_hour", "ask_next_hour"]:
-            print(f"[COLLECTOR] Etapa {current_stage}: no se recolectan actividades")
+            print(f"{get_timestamp()}",f"[COLLECTOR] Etapa {current_stage}: no se recolectan actividades")
             return global_state
         
         # Determinar el contexto temporal (pasado o futuro)
         time_context = "future" if current_stage == "ask_next_hour" else "past"
-        print(f"[COLLECTOR] Recolectando actividades con contexto: {time_context}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Recolectando actividades con contexto: {time_context}")
         
         # Clasificar la categoría de la actividad
         category = classify_activity(last_msg)
@@ -66,7 +67,7 @@ def activity_collector_node(global_state: dict) -> dict:
         
         # Si no se detectaron subactividades, crear una por defecto
         if not sub_activities:
-            print("[COLLECTOR] No se detectaron subactividades, creando una por defecto")
+            print(f"{get_timestamp()}","[COLLECTOR] No se detectaron subactividades, creando una por defecto")
             filtered_msg = re.split(r'\?', last_msg)[-1].strip() or last_msg
             default_title = " ".join(filtered_msg.split()[:5]) if filtered_msg.split() else "Actividad"
             default_activity = {
@@ -106,7 +107,7 @@ def activity_collector_node(global_state: dict) -> dict:
             activity_data["analysis"] = analyze_activity(activity_data["title"], last_msg, time_context)
             
             # Guardar la actividad en la base de datos
-            print(f"[COLLECTOR] Guardando actividad: {activity_data['title']}")
+            print(f"{get_timestamp()}",f"[COLLECTOR] Guardando actividad: {activity_data['title']}")
             db.add_activity(user_id, activity_data)
             
             # Guardar mensaje de sistema sobre la actividad detectada
@@ -122,7 +123,7 @@ def activity_collector_node(global_state: dict) -> dict:
         
         # Generar razonamiento sobre todas las actividades detectadas
         if new_activities:
-            print(f"[COLLECTOR] Generando razonamiento para {len(new_activities)} actividades")
+            print(f"{get_timestamp()}",f"[COLLECTOR] Generando razonamiento para {len(new_activities)} actividades")
             reasoning_prompt = (
                 f"El mensaje '{last_msg}' generó las siguientes actividades: "
                 f"{[act['title'] for act in new_activities]}. "
@@ -150,19 +151,19 @@ def activity_collector_node(global_state: dict) -> dict:
                 st.setdefault("activities_next_hour", []).append(interaction_entry)
             
             # Guardar el estado actualizado
-            print("[COLLECTOR] Guardando estado actualizado con nuevas actividades")
+            print(f"{get_timestamp()}","[COLLECTOR] Guardando estado actualizado con nuevas actividades")
             db.save_state(user_id, st)
             
             # Actualizar el estado global para el orquestador
             global_state["activities"].extend(new_activities)
             global_state["activity_reasoning"] = reasoning
         else:
-            print("[COLLECTOR] No se generaron actividades nuevas")
+            print(f"{get_timestamp()}","[COLLECTOR] No se generaron actividades nuevas")
         
         return global_state
         
     except Exception as e:
-        print(f"[COLLECTOR] Error en activity_collector_node: {e}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Error en activity_collector_node: {e}")
         import traceback
         traceback.print_exc()
         # Continuamos con el flujo a pesar del error
@@ -170,7 +171,7 @@ def activity_collector_node(global_state: dict) -> dict:
 
 def classify_activity(msg: str) -> str:
     """Clasifica el tipo de actividad basado en el mensaje del usuario."""
-    print(f"[COLLECTOR] Clasificando actividad del mensaje: '{msg[:50]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Clasificando actividad del mensaje: '{msg[:50]}...'")
     
     prompt = (
         f"Analiza el siguiente mensaje: '{msg}'. Determina la categoría más adecuada para la actividad descrita. "
@@ -180,7 +181,7 @@ def classify_activity(msg: str) -> str:
     )
     
     response = ask_gpt(prompt)
-    print(f"[COLLECTOR] Respuesta de clasificación: '{response[:100]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Respuesta de clasificación: '{response[:100]}...'")
     
     try:
         import json
@@ -201,19 +202,19 @@ def classify_activity(msg: str) -> str:
             if cleaned_response:
                 data = json.loads(cleaned_response)
             else:
-                print("[COLLECTOR] No se pudo extraer JSON de la clasificación, usando categoría por defecto")
+                print(f"{get_timestamp()}","[COLLECTOR] No se pudo extraer JSON de la clasificación, usando categoría por defecto")
                 return "Otra"
         
         category = data.get("category", "Otra")
-        print(f"[COLLECTOR] Categoría detectada: {category}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Categoría detectada: {category}")
         return category.strip()
     except Exception as e:
-        print(f"[COLLECTOR] Error al procesar la categoría: {e}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Error al procesar la categoría: {e}")
         return "Otra"
 
 def extract_sub_activities(msg: str, time_context: str) -> list:
     """Extrae diferentes actividades de un mensaje del usuario."""
-    print(f"[COLLECTOR] Extrayendo subactividades del mensaje: '{msg[:50]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Extrayendo subactividades del mensaje: '{msg[:50]}...'")
     
     prompt = (
         f"Analiza el siguiente mensaje: '{msg}'. Extrae todas las actividades distintas que se describen en el mensaje. "
@@ -230,7 +231,7 @@ def extract_sub_activities(msg: str, time_context: str) -> list:
     )
     
     response = ask_gpt(prompt)
-    print(f"[COLLECTOR] Respuesta de extracción de subactividades: '{response[:100]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Respuesta de extracción de subactividades: '{response[:100]}...'")
     
     try:
         import json
@@ -252,11 +253,11 @@ def extract_sub_activities(msg: str, time_context: str) -> list:
             if cleaned_response:
                 data = json.loads(cleaned_response)
             else:
-                print("[COLLECTOR] No se pudo extraer JSON de subactividades, devolviendo lista vacía")
+                print(f"{get_timestamp()}","[COLLECTOR] No se pudo extraer JSON de subactividades, devolviendo lista vacía")
                 return []
         
         activities = data.get("activities", [])
-        print(f"[COLLECTOR] Se detectaron {len(activities)} subactividades")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Se detectaron {len(activities)} subactividades")
         
         # Validar y normalizar cada actividad
         for activity in activities:
@@ -273,12 +274,12 @@ def extract_sub_activities(msg: str, time_context: str) -> list:
         
         return activities
     except Exception as e:
-        print(f"[COLLECTOR] Error al extraer subactividades: {e}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Error al extraer subactividades: {e}")
         return []
 
 def generate_clarification_questions(msg: str, activity_title: str) -> list:
     """Genera preguntas de clarificación específicas para una actividad."""
-    print(f"[COLLECTOR] Generando preguntas de clarificación para: '{activity_title}'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Generando preguntas de clarificación para: '{activity_title}'")
     
     prompt = (
         f"Analiza el mensaje: '{msg}'. Considera la actividad '{activity_title}' y genera "
@@ -289,7 +290,7 @@ def generate_clarification_questions(msg: str, activity_title: str) -> list:
     )
     
     response = ask_gpt(prompt)
-    print(f"[COLLECTOR] Respuesta de generación de preguntas: '{response[:100]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Respuesta de generación de preguntas: '{response[:100]}...'")
     
     try:
         import json
@@ -310,28 +311,28 @@ def generate_clarification_questions(msg: str, activity_title: str) -> list:
             if cleaned_response:
                 data = json.loads(cleaned_response)
             else:
-                print("[COLLECTOR] No se pudo extraer JSON de preguntas, usando pregunta por defecto")
+                print(f"{get_timestamp()}","[COLLECTOR] No se pudo extraer JSON de preguntas, usando pregunta por defecto")
                 return [f"¿Podrías darnos más detalles sobre '{activity_title}'?"]
         
         questions = data.get("questions", [])
         
         # Si hay preguntas, limitar a 3 máximo
         if questions:
-            print(f"[COLLECTOR] Se generaron {len(questions)} preguntas de clarificación")
+            print(f"{get_timestamp()}",f"[COLLECTOR] Se generaron {len(questions)} preguntas de clarificación")
             return questions[:3]
         else:
             # Si no hay preguntas, usar pregunta por defecto
-            print("[COLLECTOR] No se generaron preguntas, usando pregunta por defecto")
+            print(f"{get_timestamp()}","[COLLECTOR] No se generaron preguntas, usando pregunta por defecto")
             return [f"¿Podrías darnos más detalles sobre '{activity_title}'?"]
             
     except Exception as e:
-        print(f"[COLLECTOR] Error al generar preguntas de clarificación: {e}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Error al generar preguntas de clarificación: {e}")
         # Si hay un error, proporcionar una pregunta genérica
         return [f"¿Podrías darnos más detalles sobre '{activity_title}'?"]
 
 def extract_entities_from_activity(msg: str, activity_title: str) -> list:
     """Extrae entidades (personas, lugares, conceptos) relacionadas con una actividad."""
-    print(f"[COLLECTOR] Extrayendo entidades para actividad: '{activity_title}'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Extrayendo entidades para actividad: '{activity_title}'")
     
     prompt = (
         f"Del mensaje: '{msg}', extrae entidades relacionadas con la actividad '{activity_title}'. "
@@ -346,7 +347,7 @@ def extract_entities_from_activity(msg: str, activity_title: str) -> list:
     )
     
     response = ask_gpt(prompt)
-    print(f"[COLLECTOR] Respuesta de extracción de entidades: '{response[:100]}...'")
+    print(f"{get_timestamp()}",f"[COLLECTOR] Respuesta de extracción de entidades: '{response[:100]}...'")
     
     try:
         import json
@@ -367,7 +368,7 @@ def extract_entities_from_activity(msg: str, activity_title: str) -> list:
             if cleaned_response:
                 data = json.loads(cleaned_response)
             else:
-                print("[COLLECTOR] No se pudo extraer JSON de entidades, devolviendo lista vacía")
+                print(f"{get_timestamp()}","[COLLECTOR] No se pudo extraer JSON de entidades, devolviendo lista vacía")
                 return []
         
         entities = data.get("entities", [])
@@ -376,10 +377,10 @@ def extract_entities_from_activity(msg: str, activity_title: str) -> list:
         for entity in entities:
             entity["entity_id"] = str(ObjectId())
         
-        print(f"[COLLECTOR] Se detectaron {len(entities)} entidades")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Se detectaron {len(entities)} entidades")
         return entities
     except Exception as e:
-        print(f"[COLLECTOR] Error al extraer entidades de actividad: {e}")
+        print(f"{get_timestamp()}",f"[COLLECTOR] Error al extraer entidades de actividad: {e}")
         return []
     
 def analyze_activity(activity_title: str, full_message: str, time_context: str) -> str:

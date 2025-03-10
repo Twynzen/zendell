@@ -1,6 +1,7 @@
 # /tests/test_services.py
 
 import pytest
+from core.utils import get_timestamp
 from services.llm_provider import ask_gpt
 
 #@pytest.mark.skip(reason="Este test funciona correctamente y no requiere ser ejecutado ahora.")
@@ -18,8 +19,8 @@ def test_ask_gpt_basic(prompt):
     response = ask_gpt(prompt)
 
     # Imprimimos en consola el prompt y la respuesta recibida
-    print(f"\n[TEST] Prompt: {prompt}")
-    print(f"[TEST] Respuesta del modelo: {response}")
+    print(f"{get_timestamp()}",f"\n[TEST] Prompt: {prompt}")
+    print(f"{get_timestamp()}",f"[TEST] Respuesta del modelo: {response}")
 
     # Verificamos que la respuesta no sea None
     assert response is not None, "La respuesta no debería ser None."

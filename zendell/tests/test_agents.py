@@ -14,6 +14,7 @@ from agents.recommender import recommender_node, State as RecommenderState
 
 # Ojo: Este goal_finder usa un State distinto
 from agents.goal_finder import goal_finder_node, State as GoalFinderState
+from core.utils import get_timestamp
 
 
 # =============================================================================
@@ -53,7 +54,7 @@ def test_activity_collector(db_manager_mock):
     }
     db_manager_mock.get_state.return_value = fake_db_state
 
-    print(f"\n[TEST] Probando 'activity_collector_node' con estado (BD) inicial: {fake_db_state}")
+    print(f"{get_timestamp()}",f"\n[TEST] Probando 'activity_collector_node' con estado (BD) inicial: {fake_db_state}")
 
     # Nueva actividad a agregar
     new_activity = "Tomar café"
@@ -64,7 +65,7 @@ def test_activity_collector(db_manager_mock):
         new_activity=new_activity
     )
 
-    print(f"[TEST] Estado actualizado tras agregar actividad '{new_activity}': {updated_state}")
+    print(f"{get_timestamp()}",f"[TEST] Estado actualizado tras agregar actividad '{new_activity}': {updated_state}")
 
     # Verificamos que se haya agregado la nueva actividad
     assert any(
@@ -99,16 +100,16 @@ def test_analyzer_node(db_manager_mock):
     }
     db_manager_mock.get_state.return_value = fake_db_state
 
-    print(f"\n[TEST] Probando 'analyzer_node' con estado (BD) inicial: {fake_db_state}")
+    print(f"{get_timestamp()}",f"\n[TEST] Probando 'analyzer_node' con estado (BD) inicial: {fake_db_state}")
 
     # Ejecutamos el nodo analyzer
     updated_state = analyzer_node(fake_db_state)
 
-    print(f"[TEST] Estado actualizado tras ejecutar 'analyzer_node': {updated_state}")
+    print(f"{get_timestamp()}",f"[TEST] Estado actualizado tras ejecutar 'analyzer_node': {updated_state}")
 
     # Verificamos que el campo 'analysis' se haya llenado
     assert updated_state["analysis"] != "", "El análisis no debería estar vacío."
-    print(f"\n[TEST] Análisis generado: {updated_state['analysis']}")
+    print(f"{get_timestamp()}",f"\n[TEST] Análisis generado: {updated_state['analysis']}")
 
 
 # =============================================================================
@@ -133,16 +134,16 @@ def test_recommender_node(db_manager_mock):
     }
     db_manager_mock.get_state.return_value = fake_db_state
 
-    print(f"\n[TEST] Probando 'recommender_node' con estado (BD) inicial: {fake_db_state}")
+    print(f"{get_timestamp()}",f"\n[TEST] Probando 'recommender_node' con estado (BD) inicial: {fake_db_state}")
 
     # Ejecutamos el nodo recommender
     updated_state = recommender_node(fake_db_state)
 
-    print(f"[TEST] Estado actualizado tras ejecutar 'recommender_node': {updated_state}")
+    print(f"{get_timestamp()}",f"[TEST] Estado actualizado tras ejecutar 'recommender_node': {updated_state}")
 
     # Verificamos que se hayan generado recomendaciones
     assert len(updated_state["recommendation"]) > 0, "No se generaron recomendaciones."
-    print(f"\n[TEST] Recomendaciones generadas: {updated_state['recommendation']}")
+    print(f"{get_timestamp()}",f"\n[TEST] Recomendaciones generadas: {updated_state['recommendation']}")
 
     # Verificamos que se haya registrado la hora de la última recomendación
     assert updated_state["last_recommendation_time"] != "", "No se registró la hora de la recomendación."
@@ -174,7 +175,7 @@ def test_goal_finder_node_first_interaction(db_manager_mock):
     # user_id ficticio
     user_id = "test_user_001"
 
-    print(f"\n[TEST] Probando 'goal_finder_node' primera interacción (user_id={user_id})")
+    print(f"{get_timestamp()}",f"\n[TEST] Probando 'goal_finder_node' primera interacción (user_id={user_id})")
 
     updated_state = goal_finder_node(
         user_id=user_id,
@@ -183,7 +184,7 @@ def test_goal_finder_node_first_interaction(db_manager_mock):
         max_daily_interactions=16
     )
 
-    print(f"[TEST] Estado actualizado tras la primera interacción: {updated_state}")
+    print(f"{get_timestamp()}",f"[TEST] Estado actualizado tras la primera interacción: {updated_state}")
 
     # Verificamos que se haya solicitado información general
     assert "respuesta_inicial" in updated_state["general_info"], "No se solicitó información general al usuario."

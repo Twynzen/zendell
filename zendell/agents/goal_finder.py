@@ -1,6 +1,7 @@
 # zendell/agents/goal_finder.py
 
 from datetime import datetime, timedelta
+from core.utils import get_timestamp
 from zendell.services.llm_provider import ask_gpt
 from zendell.core.memory_manager import MemoryManager
 
@@ -61,12 +62,12 @@ def goal_finder_node(user_id: str, db_manager, hours_between_interactions: int =
     
     # Verificar si puede interactuar
     if not can_interact(state.get("last_interaction_time", ""), hours_between_interactions):
-        print("[GoalFinder] No ha transcurrido el intervalo para interactuar.")
+        print(f"{get_timestamp()}","[GoalFinder] No ha transcurrido el intervalo para interactuar.")
         return state
     
     # Verificar límite diario
     if state.get("daily_interaction_count", 0) >= max_daily_interactions:
-        print("[GoalFinder] Límite de interacciones diarias alcanzado.")
+        print(f"{get_timestamp()}","[GoalFinder] Límite de interacciones diarias alcanzado.")
         return state
     
     # Determinar el objetivo de la interacción

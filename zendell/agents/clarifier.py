@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from core.utils import get_timestamp
 from zendell.services.llm_provider import ask_gpt
 
 def clarifier_node(global_state: dict) -> dict:
@@ -18,10 +19,10 @@ def clarifier_node(global_state: dict) -> dict:
     db = global_state["db"]
     user_id = global_state.get("user_id", "")
     
-    print(f"[CLARIFIER] Iniciando clarifier_node con {len(activities)} actividades")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Iniciando clarifier_node con {len(activities)} actividades")
     
     if not last_msg or not activities:
-        print("[CLARIFIER] No hay mensaje o actividades, terminando sin preguntas")
+        print(f"{get_timestamp()}","[CLARIFIER] No hay mensaje o actividades, terminando sin preguntas")
         global_state["clarification_questions"] = []
         return global_state
     
@@ -39,11 +40,11 @@ def clarifier_node(global_state: dict) -> dict:
                 "original_question": activity_questions[0]
             })
     
-    print(f"[CLARIFIER] Preguntas extraídas de actividades: {len(all_questions)}")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Preguntas extraídas de actividades: {len(all_questions)}")
     
     # Si no hay suficientes preguntas, generar nuevas
     if len(all_questions) < 2:
-        print("[CLARIFIER] Generando nuevas preguntas de clarificación")
+        print(f"{get_timestamp()}","[CLARIFIER] Generando nuevas preguntas de clarificación")
         # Generar preguntas basadas en todas las actividades
         prompt = (
             f"Analiza el mensaje del usuario: '{last_msg}'. "
@@ -56,7 +57,7 @@ def clarifier_node(global_state: dict) -> dict:
         )
         
         response = ask_gpt(prompt)
-        print(f"[CLARIFIER] Respuesta del LLM: '{response[:100]}...'")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Respuesta del LLM: '{response[:100]}...'")
         
         try:
             # Intentar limpiar y extraer el JSON con regex
@@ -69,18 +70,18 @@ def clarifier_node(global_state: dict) -> dict:
             
             if matches:
                 json_str = matches.group(1)
-                print(f"[CLARIFIER] JSON extraído: '{json_str[:50]}...'")
+                print(f"{get_timestamp()}",f"[CLARIFIER] JSON extraído: '{json_str[:50]}...'")
                 data = json.loads(json_str)
             else:
                 # Intentar limpiar eliminando texto antes y después de llaves
                 cleaned_response = re.sub(r'^[^{]*', '', response)
                 cleaned_response = re.sub(r'[^}]*$', '', cleaned_response)
-                print(f"[CLARIFIER] Respuesta limpiada: '{cleaned_response[:50]}...'")
+                print(f"{get_timestamp()}",f"[CLARIFIER] Respuesta limpiada: '{cleaned_response[:50]}...'")
                 
                 if cleaned_response:
                     data = json.loads(cleaned_response)
                 else:
-                    print("[CLARIFIER] No se pudo extraer JSON, usando pregunta por defecto")
+                    print(f"{get_timestamp()}","[CLARIFIER] No se pudo extraer JSON, usando pregunta por defecto")
                     raise ValueError("No JSON found")
             
             questions = data.get("questions", [])
@@ -93,10 +94,10 @@ def clarifier_node(global_state: dict) -> dict:
                     "original_question": question
                 })
                 
-            print(f"[CLARIFIER] {len(questions)} preguntas generadas")
+            print(f"{get_timestamp()}",f"[CLARIFIER] {len(questions)} preguntas generadas")
                 
         except Exception as e:
-            print(f"[CLARIFIER] Error al procesar preguntas de clarificación: {e}")
+            print(f"{get_timestamp()}",f"[CLARIFIER] Error al procesar preguntas de clarificación: {e}")
             # Fallback: una pregunta genérica
             fallback_question = "¿Podrías darme más detalles sobre estas actividades?"
             all_questions.append({
@@ -104,11 +105,11 @@ def clarifier_node(global_state: dict) -> dict:
                 "activity_id": None,
                 "original_question": fallback_question
             })
-            print("[CLARIFIER] Usando pregunta fallback")
+            print(f"{get_timestamp()}","[CLARIFIER] Usando pregunta fallback")
     
     # Limitar a 3 preguntas máximo
     selected_questions = all_questions[:3]
-    print(f"[CLARIFIER] Preguntas seleccionadas finales: {len(selected_questions)}")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Preguntas seleccionadas finales: {len(selected_questions)}")
     
     # Actualizar global_state con las preguntas seleccionadas
     global_state["clarification_questions"] = [q["question"] for q in selected_questions]
@@ -129,9 +130,9 @@ def clarifier_node(global_state: dict) -> dict:
         })
         db.save_state(user_id, state)
     except Exception as e:
-        print(f"[CLARIFIER] Error al guardar historial de clarificación: {e}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Error al guardar historial de clarificación: {e}")
     
-    print("[CLARIFIER] clarifier_node completado con éxito")
+    print(f"{get_timestamp()}","[CLARIFIER] clarifier_node completado con éxito")
     return global_state
 
 def process_clarifier_response(global_state: dict) -> dict:
@@ -147,10 +148,10 @@ def process_clarifier_response(global_state: dict) -> dict:
     activities = global_state.get("activities", [])
     question_metadata = global_state.get("clarification_metadata", [])
     
-    print(f"[CLARIFIER] Procesando respuesta del usuario: '{user_input[:50]}...'")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Procesando respuesta del usuario: '{user_input[:50]}...'")
     
     if not user_input or not activities:
-        print("[CLARIFIER] No hay input de usuario o actividades para procesar")
+        print(f"{get_timestamp()}","[CLARIFIER] No hay input de usuario o actividades para procesar")
         return global_state
     
     db = global_state["db"]
@@ -161,10 +162,10 @@ def process_clarifier_response(global_state: dict) -> dict:
     
     # Si no hay preguntas registradas, usar una genérica para el análisis
     if not questions_asked:
-        print("[CLARIFIER] No hay preguntas registradas, usando genérica")
+        print(f"{get_timestamp()}","[CLARIFIER] No hay preguntas registradas, usando genérica")
         questions_asked = ["Pregunta de clarificación sobre las actividades"]
     
-    print(f"[CLARIFIER] Preguntas realizadas: {questions_asked}")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Preguntas realizadas: {questions_asked}")
     
     # Analizar la respuesta del usuario
     prompt = (
@@ -183,7 +184,7 @@ def process_clarifier_response(global_state: dict) -> dict:
     )
     
     response = ask_gpt(prompt)
-    print(f"[CLARIFIER] Respuesta del LLM: '{response[:100]}...'")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Respuesta del LLM: '{response[:100]}...'")
     
     # Preparar análisis por defecto
     default_analysis = {
@@ -203,18 +204,18 @@ def process_clarifier_response(global_state: dict) -> dict:
         
         if matches:
             json_str = matches.group(1)
-            print(f"[CLARIFIER] JSON extraído: '{json_str[:50]}...'")
+            print(f"{get_timestamp()}",f"[CLARIFIER] JSON extraído: '{json_str[:50]}...'")
             data = json.loads(json_str)
         else:
             # Intentar limpiar eliminando texto antes y después de llaves
             cleaned_response = re.sub(r'^[^{]*', '', response)
             cleaned_response = re.sub(r'[^}]*$', '', cleaned_response)
-            print(f"[CLARIFIER] Respuesta limpiada: '{cleaned_response[:50]}...'")
+            print(f"{get_timestamp()}",f"[CLARIFIER] Respuesta limpiada: '{cleaned_response[:50]}...'")
             
             if cleaned_response:
                 data = json.loads(cleaned_response)
             else:
-                print("[CLARIFIER] No se pudo extraer JSON, usando análisis por defecto")
+                print(f"{get_timestamp()}","[CLARIFIER] No se pudo extraer JSON, usando análisis por defecto")
                 raise ValueError("No JSON found")
         
         extracted_analyses = data.get("analysis", [])
@@ -222,11 +223,11 @@ def process_clarifier_response(global_state: dict) -> dict:
         
         # Verificar que haya análisis
         if not extracted_analyses:
-            print("[CLARIFIER] Análisis vacío, usando análisis por defecto")
+            print(f"{get_timestamp()}","[CLARIFIER] Análisis vacío, usando análisis por defecto")
             extracted_analyses = [default_analysis]
             
     except Exception as e:
-        print(f"[CLARIFIER] Error al procesar respuesta del clarificador: {e}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Error al procesar respuesta del clarificador: {e}")
         # Valores por defecto
         extracted_analyses = [default_analysis]
         new_questions = []
@@ -235,7 +236,7 @@ def process_clarifier_response(global_state: dict) -> dict:
     if not extracted_analyses:
         extracted_analyses = [default_analysis]
     
-    print(f"[CLARIFIER] Análisis extraídos: {len(extracted_analyses)}")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Análisis extraídos: {len(extracted_analyses)}")
     
     # Actualizar actividades con la información obtenida
     updated_activities = 0
@@ -282,9 +283,9 @@ def process_clarifier_response(global_state: dict) -> dict:
                     activity["clarifier_responses"].append(qa_entry)
                     global_state["activities"][i] = activity
         except Exception as e:
-            print(f"[CLARIFIER] Error al actualizar actividad {activity_id}: {e}")
+            print(f"{get_timestamp()}",f"[CLARIFIER] Error al actualizar actividad {activity_id}: {e}")
     
-    print(f"[CLARIFIER] Actividades actualizadas: {updated_activities}")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Actividades actualizadas: {updated_activities}")
     
     # Si hay actividades sin asociación específica (preguntas generales)
     general_activities = [a for a in activities if not any(m.get("activity_id") == a.get("activity_id") for m in question_metadata)]
@@ -307,7 +308,7 @@ def process_clarifier_response(global_state: dict) -> dict:
                     # Actualizar en la base de datos
                     db.add_clarification_to_activity(activity_id, qa_entry["question"], user_input)
                 except Exception as e:
-                    print(f"[CLARIFIER] Error al actualizar actividad general {activity_id}: {e}")
+                    print(f"{get_timestamp()}",f"[CLARIFIER] Error al actualizar actividad general {activity_id}: {e}")
     
     # Actualizar el estado del usuario
     try:
@@ -320,7 +321,7 @@ def process_clarifier_response(global_state: dict) -> dict:
         })
         db.save_state(user_id, state)
     except Exception as e:
-        print(f"[CLARIFIER] Error al actualizar estado del usuario: {e}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Error al actualizar estado del usuario: {e}")
     
     # Actualizar global_state con la información procesada
     global_state["clarifier_responses"] = [analysis.get("extracted_info", "") for analysis in extracted_analyses]
@@ -331,9 +332,9 @@ def process_clarifier_response(global_state: dict) -> dict:
     try:
         analyze_response_for_insights(global_state, user_input)
     except Exception as e:
-        print(f"[CLARIFIER] Error al analizar insights: {e}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Error al analizar insights: {e}")
     
-    print("[CLARIFIER] Procesamiento de respuesta completado")
+    print(f"{get_timestamp()}","[CLARIFIER] Procesamiento de respuesta completado")
     return global_state
 
 def analyze_response_for_insights(global_state: dict, user_input: str) -> None:
@@ -344,18 +345,18 @@ def analyze_response_for_insights(global_state: dict, user_input: str) -> None:
     db = global_state["db"]
     user_id = global_state.get("user_id", "")
     
-    print(f"[CLARIFIER] Analizando respuesta para insights: '{user_input[:50]}...'")
+    print(f"{get_timestamp()}",f"[CLARIFIER] Analizando respuesta para insights: '{user_input[:50]}...'")
     
     try:
         # Extraer entidades y conceptos
         entities = db._extract_entities_from_message(user_id, user_input)
-        print(f"[CLARIFIER] Entidades extraídas: {len(entities)}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Entidades extraídas: {len(entities)}")
     except Exception as e:
-        print(f"[CLARIFIER] Error al extraer entidades: {e}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Error al extraer entidades: {e}")
     
     try:
         # Extraer información personal
         info = db.extract_and_update_user_info(user_id, user_input)
-        print(f"[CLARIFIER] Información personal extraída: {len(info) if info else 0} campos")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Información personal extraída: {len(info) if info else 0} campos")
     except Exception as e:
-        print(f"[CLARIFIER] Error al extraer información personal: {e}")
+        print(f"{get_timestamp()}",f"[CLARIFIER] Error al extraer información personal: {e}")
