@@ -99,15 +99,6 @@ def goal_finder_node(user_id: str, db_manager, hours_between_interactions: int =
 def determine_interaction_goals(user_id: str, db_manager, memory_manager, state: dict) -> dict:
     """
     Determina los objetivos específicos para esta interacción.
-    
-    Args:
-        user_id: ID del usuario
-        db_manager: Gestor de base de datos
-        memory_manager: Gestor de memoria
-        state: Estado actual del usuario
-        
-    Returns:
-        dict: Objetivos y contexto para la interacción
     """
     # Si es la primera interacción o faltan datos del perfil
     if not state.get("name") or state.get("name") == "Desconocido":
@@ -136,6 +127,18 @@ def determine_interaction_goals(user_id: str, db_manager, memory_manager, state:
             "context": f"Completar información de perfil: {', '.join(missing_general_info)}"
         }
     
+    # *** NUEVA SECCIÓN ***
+    # Verificar si el usuario está en una etapa final (conversación anterior completa)
+    last_conversation_stage = state.get("conversation_stage", "initial")
+    if last_conversation_stage == "final":
+        # Este es un usuario que regresa después de una conversación completa
+        return {
+            "type": "returning_user",
+            "priority": "follow_up",
+            "context": "Retomar la conversación con usuario conocido"
+        }
+    # *** FIN DE NUEVA SECCIÓN ***
+    
     # Verificar última actividad para determinar contexto
     recent_activities = db_manager.get_recent_activities(user_id, limit=5)
     
@@ -156,7 +159,6 @@ def determine_interaction_goals(user_id: str, db_manager, memory_manager, state:
         "priority": "routine_update",
         "context": "Interacción rutinaria para mantener contacto y recopilar nueva información"
     }
-
 def generate_proactive_message(user_id: str, db_manager, state: dict, goals: dict) -> str:
     """
     Genera un mensaje proactivo basado en el contexto y los objetivos.
@@ -204,6 +206,24 @@ def generate_proactive_message(user_id: str, db_manager, state: dict, goals: dic
             f"La última vez mencionó que planeaba: {pending}. "
             f"Pregunta de manera amistosa cómo fueron esas actividades y qué está haciendo ahora. "
             f"Muestra genuino interés en su respuesta."
+        )
+        
+    elif interaction_type == "returning_user":
+        name = state.get("name", "")
+        
+        # Obtener actividades recientes para contexto
+        recent_activities = db_manager.get_recent_activities(user_id, limit=3)
+        activities_context = ""
+        if recent_activities:
+            activity_titles = [act.get("title", "") for act in recent_activities]
+            activities_context = f"En nuestra última conversación, hablamos sobre: {', '.join(activity_titles[:2])}. "
+        
+        prompt = (
+            f"Saluda a {name} como alguien con quien ya has conversado anteriormente. "
+            f"{activities_context}"
+            f"Pregunta cómo ha ido su día desde vuestra última conversación. "
+            f"Muestra familiaridad pero sin asumir detalles que no conoces. "
+            f"Haz una referencia natural a la conversación anterior y muestra interés en saber qué ha hecho desde entonces."
         )
     
     # Mensaje para verificación rutinaria

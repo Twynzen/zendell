@@ -218,11 +218,10 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
             stage = "final"
             reply = ("Gracias por compartir tus planes y responder a mis preguntas. He guardado toda esta información. "
                      "¿Hay algo más en lo que pueda ayudarte antes de terminar esta conversación?")
-    
+        
     elif stage == "final":
         reply = generate_closing_message(db_manager, user_id)
         update_long_term_memory(db_manager, memory_manager, user_id)
-        stage = "initial"
     
     else:
         stage = "initial"

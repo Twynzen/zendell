@@ -1,6 +1,7 @@
 # zendell/agents/communicator.py
 
 import asyncio
+from core.utils import get_timestamp
 from zendell.agents.goal_finder import goal_finder_node
 from zendell.agents.orchestrator import orchestrator_flow
 from zendell.services.discord_service import send_dm
@@ -48,10 +49,29 @@ class Communicator:
             await send_dm(author_id, f"El mensaje anterior fue: '{msg}'")
 
     async def trigger_interaction(self, user_id: str):
-        st = goal_finder_node(user_id, self.db_manager)
-        msgs = self.db_manager.conversations_coll.find({"user_id": user_id, "role": "assistant"}).sort("timestamp", -1).limit(1)
+        """
+        Inicia una interacción con el usuario basada en el contexto actual.
+        """
+        # Obtener estado antes y después de goal_finder para detectar cambios
+        state_before = self.db_manager.get_state(user_id)
+        result = goal_finder_node(user_id, self.db_manager)
+        state_after = self.db_manager.get_state(user_id)
+        
+        # Verificar si goal_finder indica que no debemos interactuar
+        if not state_after.get("can_interact", True):
+            print(f"{get_timestamp()}","[COMMUNICATOR] No es momento de interactuar según goal_finder.")
+            return
+        
+        # Buscar mensajes recientes del asistente
+        msgs = self.db_manager.conversations_coll.find(
+            {"user_id": user_id, "role": "assistant"},
+            sort=[("timestamp", -1)],
+            limit=1
+        )
         arr = list(msgs)
-        if arr:
+        
+        # Solo enviar si hay un mensaje disponible y se actualizó el estado
+        if arr and (str(state_before) != str(state_after)):
             cont = arr[0].get("content", "")
             if cont:
                 await send_dm(user_id, cont)
