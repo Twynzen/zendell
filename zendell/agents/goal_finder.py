@@ -27,24 +27,6 @@ def can_interact(last_time_str: str, hours: int = 1) -> bool:
     return (datetime.now() - last_time) >= timedelta(hours=hours)
 
 def goal_finder_node(user_id: str, db_manager, hours_between_interactions: int = 1, max_daily_interactions: int = 16):
-    """
-    Decide cuándo iniciar una interacción y qué objetivo tiene.
-    
-    Este nodo:
-    1. Verifica si es tiempo de interactuar basado en interacciones previas
-    2. Determina el contexto y objetivo de la interacción
-    3. Genera un mensaje inicial apropiado
-    4. Actualiza el estado del usuario
-    
-    Args:
-        user_id: ID del usuario
-        db_manager: Gestor de base de datos
-        hours_between_interactions: Horas mínimas entre interacciones
-        max_daily_interactions: Máximo de interacciones por día
-        
-    Returns:
-        dict: Estado actualizado del usuario
-    """
     # Inicializar gestor de memoria
     memory_manager = MemoryManager(db_manager)
     
@@ -59,26 +41,35 @@ def goal_finder_node(user_id: str, db_manager, hours_between_interactions: int =
     if state.get("last_interaction_date", "") != today_str:
         state["daily_interaction_count"] = 0
         state["last_interaction_date"] = today_str
-    
-    # Verificar si puede interactuar
-    if not can_interact(state.get("last_interaction_time", ""), hours_between_interactions):
-        print(f"{get_timestamp()}","[GoalFinder] No ha transcurrido el intervalo para interactuar.")
-        return state
-    
+
     # Verificar límite diario
     if state.get("daily_interaction_count", 0) >= max_daily_interactions:
-        print(f"{get_timestamp()}","[GoalFinder] Límite de interacciones diarias alcanzado.")
+        print(f"{get_timestamp()}", "[GoalFinder] Límite de interacciones diarias alcanzado.")
         return state
-    
+
+    # AÑADIR: Verificar si la conversación previa está en estado final
+    current_stage = state.get("conversation_stage", "initial")
+    if current_stage == "final":
+        state["conversation_stage"] = "ready_for_new"
+        db_manager.save_state(user_id, state)
+        print(f"{get_timestamp()}", "[GoalFinder] Conversación anterior finalizada, listo para una nueva interacción.")
+        return state  # Retornar early sin actualizar el timestamp
+
+    # Verificar si puede interactuar (después de la comprobación del estado final)
+    if not can_interact(state.get("last_interaction_time", ""), hours_between_interactions):
+        print(f"{get_timestamp()}", "[GoalFinder] No ha transcurrido el intervalo para interactuar.")
+        return state
+
     # Determinar el objetivo de la interacción
     interaction_goals = determine_interaction_goals(user_id, db_manager, memory_manager, state)
     
     # Generar mensaje inicial basado en el contexto
     message = generate_proactive_message(user_id, db_manager, state, interaction_goals)
     
-    # Actualizar estado con la nueva interacción
-    state["last_interaction_time"] = now.isoformat()
-    state["daily_interaction_count"] = state.get("daily_interaction_count", 0) + 1
+    # IMPORTANTE: Solo actualizar el timestamp si se genera un mensaje
+    if message:
+        state["last_interaction_time"] = now.isoformat()
+        state["daily_interaction_count"] = state.get("daily_interaction_count", 0) + 1
     
     # Guardar el mensaje en memoria a corto plazo
     db_manager.add_to_short_term_info(user_id, f"[GoalFinder] {message[:80]}...")
@@ -97,12 +88,8 @@ def goal_finder_node(user_id: str, db_manager, hours_between_interactions: int =
     return state
 
 def determine_interaction_goals(user_id: str, db_manager, memory_manager, state: dict) -> dict:
-    """
-    Determina los objetivos específicos para esta interacción.
-    """
     # Si es la primera interacción o faltan datos del perfil
     if not state.get("name") or state.get("name") == "Desconocido":
-        # Preparar para la etapa inicial
         return {
             "type": "initial_greeting",
             "missing_profile": True,
@@ -127,22 +114,17 @@ def determine_interaction_goals(user_id: str, db_manager, memory_manager, state:
             "context": f"Completar información de perfil: {', '.join(missing_general_info)}"
         }
     
-    # *** NUEVA SECCIÓN ***
-    # Verificar si el usuario está en una etapa final (conversación anterior completa)
-    last_conversation_stage = state.get("conversation_stage", "initial")
-    if last_conversation_stage == "final":
-        # Este es un usuario que regresa después de una conversación completa
+    # SECCIÓN PARA USUARIOS QUE REGRESAN: detecta el estado "ready_for_new"
+    current_stage = state.get("conversation_stage", "initial")
+    if current_stage == "ready_for_new":
         return {
             "type": "returning_user",
             "priority": "follow_up",
             "context": "Retomar la conversación con usuario conocido"
         }
-    # *** FIN DE NUEVA SECCIÓN ***
     
     # Verificar última actividad para determinar contexto
     recent_activities = db_manager.get_recent_activities(user_id, limit=5)
-    
-    # Verificar si hay actividades futuras pendientes de seguimiento
     future_activities = [act for act in recent_activities if act.get("time_context") == "future"]
     
     if future_activities:
@@ -153,12 +135,13 @@ def determine_interaction_goals(user_id: str, db_manager, memory_manager, state:
             "context": "Seguimiento de actividades planificadas anteriormente"
         }
     
-    # Si no hay nada específico, interacción normal
+    # Interacción normal
     return {
         "type": "regular_check",
         "priority": "routine_update",
         "context": "Interacción rutinaria para mantener contacto y recopilar nueva información"
     }
+
 def generate_proactive_message(user_id: str, db_manager, state: dict, goals: dict) -> str:
     """
     Genera un mensaje proactivo basado en el contexto y los objetivos.
@@ -210,7 +193,6 @@ def generate_proactive_message(user_id: str, db_manager, state: dict, goals: dic
         
     elif interaction_type == "returning_user":
         name = state.get("name", "")
-        
         # Obtener actividades recientes para contexto
         recent_activities = db_manager.get_recent_activities(user_id, limit=3)
         activities_context = ""

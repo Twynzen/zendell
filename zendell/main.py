@@ -16,16 +16,15 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # Variable global para controlar el bucle principal
 running = True
 
-async def hourly_interaction_loop(communicator, interval_minutes=60):
+async def hourly_interaction_loop(communicator, interval_minutes=5):  # Cambiado de 60 a 5 minutos
     """
     Bucle principal que inicia interacciones periódicas con los usuarios.
-    
-    Args:
-        communicator: Instancia del comunicador
-        interval_minutes: Intervalo entre interacciones en minutos (por defecto 60)
     """
     # Convertir minutos a segundos
     interval_seconds = interval_minutes * 60
+    
+    # Calcular horas (para pasar a goal_finder_node)
+    hours_between = interval_minutes / 60
     
     print(f"{get_timestamp()}",f"[MAIN] Iniciando bucle de interacción cada {interval_minutes} minutos")
     
@@ -58,8 +57,8 @@ async def hourly_interaction_loop(communicator, interval_minutes=60):
                             # Si hay un error en el formato de tiempo, continuar con la interacción
                             pass
                     
-                    # Invocar goal_finder y trigger_interaction
-                    goal_finder_node(user_id, communicator.db_manager)
+                    # MODIFICADO: Pasar el nuevo intervalo como horas a goal_finder_node
+                    goal_finder_node(user_id, communicator.db_manager, hours_between)
                     await communicator.trigger_interaction(user_id)
             
             # Esperar hasta la próxima iteración
@@ -69,7 +68,7 @@ async def hourly_interaction_loop(communicator, interval_minutes=60):
             print(f"{get_timestamp()}",f"[ERROR] en bucle de interacción: {e}")
             # Continuar con la siguiente iteración tras un breve retraso
             await asyncio.sleep(60)
-
+            
 async def maintenance_tasks_loop(db_manager, interval_hours=24):
     """
     Bucle para tareas de mantenimiento y optimización de la base de datos.

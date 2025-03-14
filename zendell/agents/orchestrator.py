@@ -18,22 +18,22 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     4. Construye el contexto adecuado para las respuestas al usuario
     5. Coordina la transición entre etapas
     """
-    print(f"{get_timestamp()}",f"[ORCHESTRATOR] START => user_id={user_id}, last_message='{last_message}'")
+    print(f"{get_timestamp()}", f"[ORCHESTRATOR] START => user_id={user_id}, last_message='{last_message}'")
     
     # Inicializar el gestor de memoria si está disponible, o None si no lo está
     try:
         memory_manager = MemoryManager(db_manager)
-        print(f"{get_timestamp()}","[ORCHESTRATOR] Memory Manager inicializado correctamente")
+        print(f"{get_timestamp()}", "[ORCHESTRATOR] Memory Manager inicializado correctamente")
     except Exception as e:
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error al inicializar Memory Manager: {e}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error al inicializar Memory Manager: {e}")
         memory_manager = None
     
     # Obtener el estado actual del usuario
     try:
         state = db_manager.get_state(user_id)
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Estado cargado correctamente: {state.keys()}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Estado cargado correctamente: {state.keys()}")
     except Exception as e:
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error al obtener estado del usuario: {e}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error al obtener estado del usuario: {e}")
         state = {
             "user_id": user_id,
             "name": "Desconocido",
@@ -45,33 +45,33 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     # Verificar y asegurar que el estado tenga todos los campos necesarios
     if "name" not in state:
         state["name"] = "Desconocido"
-        print(f"{get_timestamp()}","[ORCHESTRATOR] Campo 'name' faltante, añadido valor por defecto")
+        print(f"{get_timestamp()}", "[ORCHESTRATOR] Campo 'name' faltante, añadido valor por defecto")
     if "conversation_stage" not in state:
         state["conversation_stage"] = "initial"
-        print(f"{get_timestamp()}","[ORCHESTRATOR] Campo 'conversation_stage' faltante, añadido valor por defecto")
+        print(f"{get_timestamp()}", "[ORCHESTRATOR] Campo 'conversation_stage' faltante, añadido valor por defecto")
     if "short_term_info" not in state:
         state["short_term_info"] = []
-        print(f"{get_timestamp()}","[ORCHESTRATOR] Campo 'short_term_info' faltante, añadido valor por defecto")
+        print(f"{get_timestamp()}", "[ORCHESTRATOR] Campo 'short_term_info' faltante, añadido valor por defecto")
     if "general_info" not in state:
         state["general_info"] = {}
-        print(f"{get_timestamp()}","[ORCHESTRATOR] Campo 'general_info' faltante, añadido valor por defecto")
+        print(f"{get_timestamp()}", "[ORCHESTRATOR] Campo 'general_info' faltante, añadido valor por defecto")
     
     try:
         db_manager.save_state(user_id, state)
-        print(f"{get_timestamp()}","[ORCHESTRATOR] Estado verificado y guardado correctamente")
+        print(f"{get_timestamp()}", "[ORCHESTRATOR] Estado verificado y guardado correctamente")
     except Exception as e:
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error al guardar estado inicial: {e}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error al guardar estado inicial: {e}")
     
     # Verificar si hay un override para la etapa
     stage = state.get("conversation_stage", "initial")
     if state.get("conversation_stage_override"):
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Detected conversation_stage_override={state['conversation_stage_override']}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Detected conversation_stage_override={state['conversation_stage_override']}")
         stage = state["conversation_stage_override"]
         state["conversation_stage_override"] = None
         try:
             db_manager.save_state(user_id, state)
         except Exception as e:
-            print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error al guardar estado después de override: {e}")
+            print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error al guardar estado después de override: {e}")
     
     # Inicializar el estado global que se pasará entre agentes
     global_state = {
@@ -88,11 +88,11 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     }
     
     # 1) Procesar el mensaje con el recolector de actividades
-    print(f"{get_timestamp()}",f"[ORCHESTRATOR] activity_collector_node => stage={stage}")
+    print(f"{get_timestamp()}", f"[ORCHESTRATOR] activity_collector_node => stage={stage}")
     try:
         global_state = activity_collector_node(global_state)
     except Exception as e:
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error en activity_collector_node: {e}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error en activity_collector_node: {e}")
         import traceback
         traceback.print_exc()
     
@@ -100,7 +100,7 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     try:
         state = db_manager.get_state(user_id)
     except Exception as e:
-        print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error al recargar estado después de collector: {e}")
+        print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error al recargar estado después de collector: {e}")
     
     # Determinar los campos faltantes en el perfil
     missing_fields = get_missing_profile_fields(state)
@@ -108,7 +108,7 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     # Obtener los rangos de tiempo para referencias
     time_ranges = get_time_ranges()
     
-    print(f"{get_timestamp()}",f"[ORCHESTRATOR] missing fields={missing_fields}, time_ranges={time_ranges}, current_stage={stage}")
+    print(f"{get_timestamp()}", f"[ORCHESTRATOR] missing fields={missing_fields}, time_ranges={time_ranges}, current_stage={stage}")
     
     # Variable para la respuesta final
     reply = ""
@@ -142,7 +142,7 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
                 reply = "Gracias por compartir lo que hiciste. No necesito más detalles sobre eso."
                 stage = "ask_next_hour"
         except Exception as e:
-            print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error en clarifier_node para past: {e}")
+            print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error en clarifier_node para past: {e}")
             reply = "Gracias por compartir lo que hiciste. Pasemos a lo siguiente."
             stage = "ask_next_hour"
     
@@ -154,7 +154,7 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
             stage = "ask_next_hour"
             reply = generate_next_hour_question(db_manager, user_id, time_ranges)
         except Exception as e:
-            print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error en process_clarifier_response para past: {e}")
+            print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error en process_clarifier_response para past: {e}")
             stage = "ask_next_hour"
             reply = generate_next_hour_question(db_manager, user_id, time_ranges)
     
@@ -171,32 +171,31 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
             stage = "final"
     
     elif stage == "clarifier_next_hour":
-        # Bloque actualizado para la etapa clarifier_next_hour
         try:
-            print(f"{get_timestamp()}","[ORCHESTRATOR] Procesando respuesta de clarificación para actividades futuras")
+            print(f"{get_timestamp()}", "[ORCHESTRATOR] Procesando respuesta de clarificación para actividades futuras")
             from zendell.agents.clarifier import process_clarifier_response
             global_state["user_clarifier_response"] = last_message
             global_state = process_clarifier_response(global_state)
             
             # Realizar análisis sobre las actividades recopiladas
             try:
-                print(f"{get_timestamp()}","[ORCHESTRATOR] Iniciando análisis de actividades")
+                print(f"{get_timestamp()}", "[ORCHESTRATOR] Iniciando análisis de actividades")
                 from zendell.agents.analyzer import analyzer_node
                 global_state = analyzer_node(global_state)
-                print(f"{get_timestamp()}","[ORCHESTRATOR] Análisis completado")
+                print(f"{get_timestamp()}", "[ORCHESTRATOR] Análisis completado")
             except Exception as e:
-                print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error en analyzer_node: {e}")
+                print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error en analyzer_node: {e}")
                 import traceback
                 traceback.print_exc()
             
             # Generar recomendaciones basadas en el análisis
             try:
-                print(f"{get_timestamp()}","[ORCHESTRATOR] Generando recomendaciones")
+                print(f"{get_timestamp()}", "[ORCHESTRATOR] Generando recomendaciones")
                 from zendell.agents.recommender import recommender_node
                 global_state = recommender_node(global_state)
-                print(f"{get_timestamp()}","[ORCHESTRATOR] Recomendaciones generadas")
+                print(f"{get_timestamp()}", "[ORCHESTRATOR] Recomendaciones generadas")
             except Exception as e:
-                print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error en recommender_node: {e}")
+                print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error en recommender_node: {e}")
                 import traceback
                 traceback.print_exc()
             
@@ -207,12 +206,12 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
             try:
                 reply = generate_final_message(db_manager, user_id, global_state)
             except Exception as e:
-                print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error al generar mensaje final: {e}")
+                print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error al generar mensaje final: {e}")
                 reply = ("¡Gracias por toda la información que has compartido! Ha sido muy útil conocer más sobre ti y "
                          "tus actividades. Volveré a contactarte pronto para seguir aprendiendo. ¿Hay algo más en que pueda ayudarte por ahora?")
         
         except Exception as e:
-            print(f"{get_timestamp()}",f"[ORCHESTRATOR] Error en la etapa clarifier_next_hour: {e}")
+            print(f"{get_timestamp()}", f"[ORCHESTRATOR] Error en la etapa clarifier_next_hour: {e}")
             import traceback
             traceback.print_exc()
             stage = "final"
@@ -222,7 +221,8 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     elif stage == "final":
         reply = generate_closing_message(db_manager, user_id)
         update_long_term_memory(db_manager, memory_manager, user_id)
-    
+        # Aquí NO se cambia la etapa a "initial", se deja en "final" para mantener el estado
+        
     else:
         stage = "initial"
         reply = "Parece que hubo un problema en nuestra conversación. ¿Podemos empezar de nuevo?"
@@ -232,12 +232,13 @@ def orchestrator_flow(user_id: str, last_message: str, db_manager) -> Dict[str, 
     db_manager.save_state(user_id, state)
     db_manager.save_conversation_message(user_id, "assistant", reply, {"step": stage})
     
-    print(f"{get_timestamp()}",f"[ORCHESTRATOR] END => new_stage={stage}, reply='{reply[:60]}...'")
+    print(f"{get_timestamp()}", f"[ORCHESTRATOR] END => new_stage={stage}, reply='{reply[:60]}...'")
     
     return {
         "global_state": global_state,
         "final_text": reply
     }
+
 def get_missing_profile_fields(state: dict) -> list:
     """Determina qué campos del perfil faltan por completar."""
     fields = []
@@ -246,23 +247,18 @@ def get_missing_profile_fields(state: dict) -> list:
     name_in_state = state.get("name", "")
     name_in_info = state.get("general_info", {}).get("name", "")
     
-    # Usamos el nombre que tengamos disponible, priorizando el que esté en el estado directamente
     if not name_in_state and not name_in_info:
         fields.append("nombre")
     
-    # Verificar información general
     info = state.get("general_info", {})
-    
     if not info.get("ocupacion", ""):
         fields.append("ocupacion")
-    
     if not info.get("gustos", ""):
         fields.append("gustos")
-    
     if not info.get("metas", ""):
         fields.append("metas")
     
-    print(f"{get_timestamp()}",f"[ORCHESTRATOR] Campos faltantes en el perfil: {fields}")
+    print(f"{get_timestamp()}", f"[ORCHESTRATOR] Campos faltantes en el perfil: {fields}")
     return fields
 
 def get_time_ranges() -> dict:
@@ -286,13 +282,11 @@ def build_system_context(db, user_id: str, stage: str) -> str:
     st_info = state.get("short_term_info", [])
     last_notes = ". ".join(st_info[-3:]) if st_info else ""
     
-    # Contexto base para cualquier etapa
     context = (
         f"ETAPA: {stage}. Usuario: {name}. Últimas notas: {last_notes}. "
         "Objetivo: Recopilar información y mantener una conversación fluida y natural. "
     )
     
-    # Contexto específico para cada etapa
     if stage == "ask_profile":
         context += (
             "En esta etapa, pido datos personales básicos como nombre, ocupación, "
@@ -335,24 +329,16 @@ def build_system_context(db, user_id: str, stage: str) -> str:
 def ask_gpt_in_context(db, user_id: str, user_prompt: str, stage: str) -> str:
     """Utiliza el modelo de lenguaje con contexto específico para cada etapa."""
     system_text = build_system_context(db, user_id, stage)
-    
-    # Obtener las últimas conversaciones para contexto
     logs = db.get_user_conversation(user_id, limit=8)
-    
-    # Construir el mensaje para el modelo
     chat = [{"role": "system", "content": system_text}]
     
     for msg in logs:
         role = "assistant" if msg["role"] == "assistant" else "user"
         chat.append({"role": role, "content": msg["content"]})
     
-    # Añadir el prompt actual
     chat.append({"role": "user", "content": user_prompt})
-    
-    # Guardar el prompt en logs para depuración
     db.save_conversation_message(user_id, "system", f"GPT Prompt: {user_prompt}", {"step": stage})
     
-    # Obtener respuesta del modelo
     response = ask_gpt_chat(chat, model="gpt-3.5-turbo", temperature=0.7)
     
     return response if response else "¿Podrías repetirme lo que necesitas?"
@@ -362,7 +348,6 @@ def generate_profile_request(db, user_id: str, missing_fields: list) -> str:
     state = db.get_state(user_id)
     current_name = state.get("name", "")
     
-    # Crear prompt personalizado según los campos faltantes
     if "nombre" in missing_fields:
         if not current_name:
             prompt = "Hola, soy Zendell, tu asistente personal. Me encantaría conocerte mejor. ¿Cómo te llamas?"
@@ -401,7 +386,6 @@ def generate_next_hour_question(db, user_id: str, time_ranges: dict) -> str:
 
 def generate_clarification_message(db, user_id: str, questions: list, stage: str) -> str:
     """Genera un mensaje con preguntas de clarificación de forma natural."""
-    # Construir un prompt con las preguntas
     prompt = "Para entender mejor, me gustaría preguntarte: " + "; ".join(questions)
     
     return ask_gpt_in_context(db, user_id, prompt, stage)
@@ -411,7 +395,6 @@ def generate_final_message(db, user_id: str, global_state: dict) -> str:
     analysis = global_state.get("analysis", {}).get("summary", "")
     recommendations = global_state.get("recommendation", [])
     
-    # Construir un prompt con el análisis y las recomendaciones
     prompt = (
         f"Basado en nuestra conversación, he observado que: {analysis} "
         f"Algunas sugerencias que podrían ayudarte: {'; '.join(recommendations)}. "
@@ -432,15 +415,10 @@ def generate_closing_message(db, user_id: str) -> str:
 
 def update_long_term_memory(db, memory_manager, user_id: str) -> None:
     """Actualiza la memoria a largo plazo con la información recopilada."""
-    # Generar insights sobre las actividades (1 de cada 5 veces)
     import random
-    if random.random() < 0.2:  # 20% de probabilidad
+    if random.random() < 0.2:
         memory_manager.get_activity_insights(user_id)
-    
-    # Generar resumen de conversación (1 de cada 3 veces)
-    if random.random() < 0.33:  # 33% de probabilidad
+    if random.random() < 0.33:
         memory_manager.summarize_conversation_history(user_id)
-    
-    # Actualizar perfil a largo plazo (1 de cada 10 veces)
-    if random.random() < 0.1:  # 10% de probabilidad
+    if random.random() < 0.1:
         memory_manager.generate_long_term_reflection(user_id)
