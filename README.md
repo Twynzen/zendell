@@ -5,7 +5,6 @@ CONTEXTO DEL PROYECTO ACTUAL: # ZENDELL: Ecosistema Multiagente Proactivo
 > **Asistente “super inteligente” que te acompaña durante el día, iniciando conversaciones, recopilando información y adaptándose a tus necesidades.**  
 
 ## 1. ZENDELL es un conjunto de agentes inteligentes que trabajan en equipo para:
-
 1. **Conocer actividades hora a hora del usuario.
 2. **Analizar información del usuario para comprenderlo y entenderlo tanto fisica como mentalmente.
 3. **Interactuar proactivamente** cada hora (o en intervalos configurables).
