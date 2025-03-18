@@ -13,7 +13,6 @@ CONTEXTO DEL PROYECTO ACTUAL: # ZENDELL: Ecosistema Multiagente Proactivo
 El objetivo final es que ZENDELL sea como un “mejor amigo/ maestro y guia”, siempre al tanto de lo que necesita (sacando información, analizándola y eventualemnte al tener una amplia cantidad de datos aportar al usuario con sus necesidades, recordatorios, consejos, apoyo y prioridade).
 
 ## 2. Características Clave
-
 - **Conversaciones Proactivas**: No espera a que el usuario hable; cada hora (o cuando se configures) inicia un diálogo/conversación.
 - **Agentes Especializados**: Cada módulo (collector, analyzer, recommender, communicator, etc.) se encarga de una tarea concreta, (Esto debe ser ampliable con el fin de que si a futuro salen nuevas tecnologias o agentes de IA pueda embeberlos como un agente más al sistema, ejemplo: Un agente que busca noticias relevantes en internet y le avisa de una inversión especifica sobre x acción de empresa).
 - **Memoria y Aprendizaje**: Gracias a la base de datos y la orquestación, ZENDELL va recordando las conversaciones, aprendiendo sobre el usuario y razonando sobre sus necesidades.
