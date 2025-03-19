@@ -378,11 +378,29 @@ Creo que voy a revisar unos correos y planificar el resto del día.
 (Resultado: Se transforma la respuesta indecisa en un compromiso de acción concreta, permitiendo seguir con el flujo.)
 
 ## 6. Roadmap / Próximos Pasos
-- **Testeo y analisis de dato de multiples conversaciones a lo largo de varios días
-- ** Definir momento de conocimiento alto sobre el usuario para aportar ya con recomendacione y consejos personalizados de alto nivel de eficiencia
-- **Integración con WhatsApp y Email**: Ya en proceso para llegar a más canales.  
-- **Agente Bibliotecario**: Para manejar el contexto y el historial en mayor detalle.  
-- **Optimización y Nuevos Nodos**: Añadir más agentes especializados (por ejemplo, agente de hábitos saludables, agente de gestión financiera).
+Semana 1: Correcciones Críticas
+
+Día 1-2: Corrección del flujo del clarificador y pruebas
+Día 3-4: Mejora del manejo de estado y transiciones
+Día 5-7: Optimización del ciclo de conversación y pruebas integrales
+
+Semana 2: Mejora de Datos
+
+Día 1-2: Optimización de prompts y extracción de actividades
+Día 3-4: Mejora de relaciones entre entidades y actividades
+Día 5-7: Implementación de categorización mejorada
+
+Semana 3: Optimización de Base de Datos
+
+Día 1-3: Revisión y optimización de consultas MongoDB
+Día 4-5: Refinamiento del sistema de memoria
+Día 6-7: Normalización de estructuras de datos
+
+Semana 4: Refinamiento y Pruebas
+
+Día 1-3: Mejora de la detección de intención
+Día 4-5: Perfeccionamiento de interacciones programadas
+Día 6-7: Pruebas de integración completas y ajustes finales
 - 
 https://www.mermaidchart.com/raw/e3f8fb68-0d1e-4097-bc9c-4302d118bfe8?theme=light&version=v0.1&format=svg
 
