@@ -33,7 +33,6 @@ El proyecto se organiza en varias carpetas clave dentro de `zendell/`:
 
 ### **2. config/**  
 - `settings.py`: Guarda tokens, API keys, configuraciones varias (p. ej. `DISCORD_BOT_TOKEN`, `OPENAI_API_KEY`).  
-
 ### **3. core/**  
 - `api.py`: (Opcional) Interfaz para exponer servicios vía API.  
 - `db.py`: Maneja la conexión a MongoDB (operaciones con usuarios, estados, actividades, logs).  
