@@ -22,7 +22,6 @@ El objetivo final es que ZENDELL sea como un “mejor amigo/ maestro y guia”, 
 ## 3. Arquitectura del Proyecto
 
 El proyecto se organiza en varias carpetas clave dentro de `zendell/`:
-
 ### **1. agents/**  
 - `activity_collector.py`: Recopila actividades del usuario y las almacena en su perfil.  
 - `analyzer.py`: Analiza la información recogida para determinar estado de ánimo y patrones de comportamiento.  
