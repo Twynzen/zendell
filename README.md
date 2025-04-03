@@ -1,6 +1,6 @@
 CONTEXTO DEL PROYECTO ACTUAL: # ZENDELL: Ecosistema Multiagente Proactivo
 
-(EL PROYECTO ESTA EN ETAPAS DE TESTEO Y MEJORAS)
+(EL PROYECTO ESTA EN ETAPAS DE TESTEO Y MEJORAS TIENE UN ERROR GRAVE, EL SISTEMA NO ES FUNCIONA POR AHORA)
 
 > **Asistente “super inteligente” que te acompaña durante el día, iniciando conversaciones, recopilando información y adaptándose a tus necesidades.**  
 
